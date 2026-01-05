@@ -1,8 +1,17 @@
 import requests
 import polars as pl
+from datetime import datetime
 
 
-def __get_prices(hub: bool):
+def __get_prices(hub: bool) -> pl.DataFrame:
+    """
+    Helper function to get current prices.
+
+    :param hub: Whether to fetch HUBs or GENs/INTs/LZNs
+    :type hub: bool
+    :return: Current price records.
+    :rtype: DataFrame
+    """
     # Request
     url = "https://api.misoenergy.org/MISORTWDDataBroker/DataBrokerServices.asmx"
     headers = {
@@ -24,21 +33,40 @@ def __get_prices(hub: bool):
         print(f"An error occurred: {e}")
         # TODO: return empty df
 
+    # Fix column naming and selection
     df = pl.DataFrame(response.json()["data"])
     if "NSI" in df.columns:
         df = df.drop("NSI")
     df = df.rename({col: col.lower() for col in df.columns})
 
+    # Fix dtypes
     value_cols = ["lmp", "mcc", "mlc"]
     df = df.select(["location"] + value_cols)
     for col in value_cols:
         df = df.with_columns(pl.col(col).cast(pl.Float32))
-    df = df.with_columns(pl.lit(response.status_code).cast(pl.Int16).alias("status_code"))
+
+    # Metadata
+    df = df.with_columns(
+        pl.lit(response.status_code).cast(pl.Int16).alias("status_code")
+    )
+    df = df.with_columns(pl.lit(hub).alias("is_hub"))
+    # NOTE: since HUBs and other nodes are grabbed separately, the DTs might be slightly off.
+    df = df.with_columns(
+        pl.lit(datetime.now())
+        .cast(pl.Datetime("ms", "America/Chicago"))
+        .alias("datetime")
+    )
 
     return df
 
 
-def reload_prices_df(metadata: bool = True):
+def reload_prices_df() -> pl.DataFrame:
+    """
+    Get current prices record from MISO's LMP contour map.
+
+    :return: Prices dataframe.
+    :rtype: DataFrame
+    """
     nodes = __get_prices(hub=False)
     hubs = __get_prices(hub=True)
     prices = pl.concat([nodes, hubs]).sort(by="location")
