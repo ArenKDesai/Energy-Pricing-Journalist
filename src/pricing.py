@@ -1,6 +1,12 @@
 import requests
 import polars as pl
-from datetime import datetime
+from datetime import datetime, timezone
+import zoneinfo
+import time
+from typing import Iterator
+
+
+TIME_BETWEEN_FETCHES = 60  # 1 minute
 
 
 def __get_prices(hub: bool) -> pl.DataFrame:
@@ -26,7 +32,6 @@ def __get_prices(hub: bool) -> pl.DataFrame:
     # Response
     try:
         response = requests.post(url, headers=headers, data=payload, timeout=10)
-
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
@@ -49,11 +54,12 @@ def __get_prices(hub: bool) -> pl.DataFrame:
     df = df.with_columns(
         pl.lit(response.status_code).cast(pl.Int16).alias("status_code")
     )
-    df = df.with_columns(pl.lit(hub).alias("is_hub"))
     # NOTE: since HUBs and other nodes are grabbed separately, the DTs might be slightly off.
+    now_utc = datetime.now(timezone.utc)
+
     df = df.with_columns(
-        pl.lit(datetime.now())
-        .cast(pl.Datetime("ms", "America/Chicago"))
+        pl.lit(now_utc)
+        .dt.convert_time_zone("America/Chicago")
         .alias("datetime")
     )
 
@@ -72,3 +78,17 @@ def reload_prices_df() -> pl.DataFrame:
     prices = pl.concat([nodes, hubs]).sort(by="location")
 
     return prices
+
+
+def pricing_fetcher() -> Iterator[pl.DataFrame]:
+    """
+    Fetches RT LMP data forever.
+
+    :return: Current RT LMP records to be downloaded and stored.
+    :rtype: Iterator[DataFrame]
+    """
+    # TODO: Better looping logic.
+    while True:
+        df = reload_prices_df()
+        yield df
+        time.sleep(TIME_BETWEEN_FETCHES)

@@ -3,7 +3,7 @@ import polars as pl
 
 def records_equal(df1: pl.DataFrame, df2: pl.DataFrame) -> bool:
     """
-    Test if two pricing records are equal. Drops columns that interfere with this. 
+    Test if two pricing records are equal. Drops columns that interfere with this.
 
     :param df1: First polars dataframe.
     :type df1: pl.DataFrame
