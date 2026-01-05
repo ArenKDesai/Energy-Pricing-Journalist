@@ -1,11 +1,17 @@
 import duckdb
 import polars as pl
-from src.pricing import reload_prices_df
 
 DATABASE_PATH = "prices.db"
 
 
-def create_pricing_table(prices: pl.DataFrame) -> None:
+def update_database(prices: pl.DataFrame) -> None:
     conn = duckdb.connect(database=DATABASE_PATH)
-    conn.execute("CREATE TABLE pricing_history AS SELECT * FROM prices")
+    
+    # Create table if it's the first time
+    # NOTE: WHERE 1=0 creates the schema without uploading data automatically
+    conn.execute("CREATE TABLE IF NOT EXISTS pricing_history AS SELECT * FROM prices WHERE 1=0")
+    
+    # Append the data
+    conn.execute("INSERT INTO pricing_history SELECT * FROM prices")
+    
     conn.close()
