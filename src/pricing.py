@@ -58,9 +58,7 @@ def __get_prices(hub: bool) -> pl.DataFrame:
     now_utc = datetime.now(timezone.utc)
 
     df = df.with_columns(
-        pl.lit(now_utc)
-        .dt.convert_time_zone("America/Chicago")
-        .alias("datetime")
+        pl.lit(now_utc).dt.convert_time_zone("America/Chicago").alias("datetime")
     )
 
     return df
