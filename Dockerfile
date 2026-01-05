@@ -11,5 +11,3 @@ RUN apt-get update -y
 
 # NOTE: for debugging
 # RUN apt install vim -y 
-
-CMD ["bash"]

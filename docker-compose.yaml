@@ -3,5 +3,6 @@ services:
     build: .
     volumes:
       - .:/app
+    command: python main.py  # Explicitly tell it what to run
     stdin_open: true
     tty: true
