@@ -17,3 +17,5 @@ pred_df = pipeline.predict_df(
     timestamp_column="datetime",  # Column with datetime information
     target="lmp",  # Column(s) with time series values to predict
 )
+
+print(pred_df)
