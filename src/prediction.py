@@ -1,9 +1,11 @@
 import pandas as pd  # requires: pip install 'pandas[pyarrow]'
 from chronos import Chronos2Pipeline
 import polars as pl
+import torch
 
 all_prices = pl.read_csv("data.csv").drop(["mlc", "mcc"])
-pipeline = Chronos2Pipeline.from_pretrained("amazon/chronos-2", device_map="cuda")
+accelerator = "cuda" if torch.cuda.is_available else "cpu"
+pipeline = Chronos2Pipeline.from_pretrained("amazon/chronos-2", device_map=accelerator)
 
 # Load historical target values and past values of covariates
 context_df = all_prices.to_pandas()
