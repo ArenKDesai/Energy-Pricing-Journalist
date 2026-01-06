@@ -8,3 +8,7 @@ The duckdb persistent table will be stored in `prices.db`.
 2. ~~Build repository for that data (hold maybe 1 month of data, probably less)~~
 3. Build dashboard to show highlights
 4. PROFIT
+
+
+## Log
+2026-01-05 19:35: Data was added to the duckdb twice due to duplicate data from the scraping requests. 

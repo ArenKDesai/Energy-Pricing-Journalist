@@ -69,10 +69,11 @@ def reload_prices_df() -> pl.DataFrame:
     :rtype: DataFrame
     """
     nodes = __get_prices(hub=False)
-    hubs = __get_prices(hub=True)
-    prices = pl.concat([nodes, hubs]).sort(by="location")
+    # NOTE: apparently the HUBs are returned without specifying them in the request. 
+    # hubs = __get_prices(hub=True)
+    # prices = pl.concat([nodes, hubs]).sort(by="location")
 
-    return prices
+    return nodes
 
 
 def pricing_fetcher() -> Iterator[pl.DataFrame]:
