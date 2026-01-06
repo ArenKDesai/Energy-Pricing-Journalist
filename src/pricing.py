@@ -7,6 +7,7 @@ from typing import Iterator
 
 
 TIME_BETWEEN_FETCHES = 60  # 1 minute
+TOTAL_RETRIES = 3
 
 
 def __get_prices(hub: bool) -> pl.DataFrame:
@@ -30,13 +31,9 @@ def __get_prices(hub: bool) -> pl.DataFrame:
         payload = r'{"messageType":"GetDataByNodeTypes","clientMessage":{"nodeTypes":["GEN","INT","LZN"]}}'
 
     # Response
-    try:
-        response = requests.post(url, headers=headers, data=payload, timeout=10)
-        response.raise_for_status()
-
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        # TODO: return empty df
+    # NOTE: letting an exception be raised here - handling logic is in reload_prices_df
+    response = requests.post(url, headers=headers, data=payload, timeout=10)
+    response.raise_for_status()
 
     # Fix column naming and selection
     df = pl.DataFrame(response.json()["data"])
@@ -85,8 +82,24 @@ def pricing_fetcher() -> Iterator[pl.DataFrame]:
     :return: Current RT LMP records to be downloaded and stored.
     :rtype: Iterator[DataFrame]
     """
-    # TODO: Better looping logic.
+    attempts = 0
     while True:
-        df = reload_prices_df()
-        yield df
-        time.sleep(TIME_BETWEEN_FETCHES)
+        if attempts > TOTAL_RETRIES:
+            raise Exception("Too many retries - something isn't working.")
+        try:
+            df = reload_prices_df()
+            yield df
+            attempts = 0
+            time.sleep(TIME_BETWEEN_FETCHES)
+        except Exception as e:
+            print(f"Exception raised: {e}")
+            attempts += 1
+
+            # Wait and see if the error is resolved
+            match attempts:
+                case 1:
+                    time.sleep(5)
+                case 2:
+                    time.sleep(60)
+                case _:
+                    time.sleep(60*5)
