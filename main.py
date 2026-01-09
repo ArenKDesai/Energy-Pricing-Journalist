@@ -19,7 +19,7 @@ def redo_predictions() -> None:
     if not break_flag:
         start = time.time()
         dashboard_df = generate_predictions()
-        dashboard_df.to_csv("plot.csv")
+        dashboard_df.to_parquet("plot.parquet")
         end = time.time()
         print(f"{datetime.now().ctime()}\tPrediction took {end - start:0.2f}s")
         if ((end - 60 * 5) <= start):

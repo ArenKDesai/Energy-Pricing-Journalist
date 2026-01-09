@@ -1,66 +1,90 @@
 import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
-
-# Assume dashboard_df is your DataFrame
-# For demonstration, if needed, you can load or create it here, but assuming it's provided
-dashboard_df = pd.read_csv("plot.csv")  # Replace if necessary
-dashboard_df["datetime"] = pd.to_datetime(dashboard_df["datetime"])
-
-# Get unique locations
-locations = dashboard_df["location"].unique()
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
 
-# Layout of the dashboard
-app.layout = html.Div(
-    style={
-        "backgroundColor": "#0d1117",
-        "color": "#c9d1d9",
-        "fontFamily": "Arial, sans-serif",
-        "padding": "20px",
-    },
-    children=[
-        html.H1(
-            "MISO Market LMP Dashboard",
-            style={"textAlign": "center", "color": "#AAF0C1"},
-        ),
-        html.Div(
-            [
-                html.Label(
-                    "Select Location:",
-                    style={"fontSize": "18px", "marginRight": "10px"},
-                ),
-                dcc.Dropdown(
-                    id="location-dropdown",
-                    options=[{"label": loc, "value": loc} for loc in locations],
-                    value=locations[0],  # Default to first location
-                    style={
-                        "width": "300px",
-                        "backgroundColor": "#161b22",
-                        "color": "#c9d1d9",
-                        "border": "1px solid #30363d",
-                    },
-                ),
-            ],
-            style={
-                "display": "flex",
-                "justifyContent": "center",
-                "alignItems": "center",
-                "marginBottom": "20px",
-            },
-        ),
-        dcc.Graph(id="lmp-graph", style={"height": "600px"}),
-    ],
+# Define a function to load data and generate layout (runs on every page load)
+def serve_layout():
+    # Reload the CSV fresh every time the page is accessed
+    dashboard_df = pd.read_parquet("plot.parquet")
+    dashboard_df["datetime"] = pd.to_datetime(dashboard_df["datetime"])
+
+    # Get unique locations (will be up-to-date with new data)
+    locations = dashboard_df["location"].unique()
+
+    return html.Div(
+        style={
+            "backgroundColor": "#0d1117",
+            "color": "#c9d1d9",
+            "fontFamily": "Arial, sans-serif",
+            "padding": "20px",
+        },
+        children=[
+            html.H1(
+                "MISO Market LMP Dashboard",
+                style={"textAlign": "center", "color": "#AAF0C1"},
+            ),
+            html.Div(
+                [
+                    html.Label(
+                        "Select Location:",
+                        style={"fontSize": "18px", "marginRight": "10px"},
+                    ),
+                    dcc.Dropdown(
+                        id="location-dropdown",
+                        options=[{"label": loc, "value": loc} for loc in locations],
+                        value=locations[0] if len(locations) > 0 else None,
+                        style={
+                            "width": "300px",
+                            "backgroundColor": "#161b22",
+                            "color": "#c9d1d9",
+                            "border": "1px solid #30363d",
+                        },
+                    ),
+                ],
+                style={
+                    "display": "flex",
+                    "justifyContent": "center",
+                    "alignItems": "center",
+                    "marginBottom": "20px",
+                },
+            ),
+            dcc.Graph(id="lmp-graph", style={"height": "600px"}),
+            # Hidden interval for auto-refresh every 4 minutes (240000 ms)
+            dcc.Interval(
+                id="auto-refresh-interval",
+                interval=4 * 60 * 1000,  # 4 minutes
+                n_intervals=0,
+                max_intervals=-1,  # Run indefinitely
+            ),
+        ],
+    )
+
+# Assign the dynamic layout
+app.layout = serve_layout
+
+# Callback to update the graph (triggered by dropdown OR interval)
+@app.callback(
+    Output("lmp-graph", "figure"),
+    Input("location-dropdown", "value"),
+    Input("auto-refresh-interval", "n_intervals"),
+    State("location-dropdown", "value"),  # To keep current selection after interval
 )
+def update_graph(selected_location, n_intervals, current_location):
+    # Use current selection if None (helps after interval trigger)
+    if selected_location is None:
+        selected_location = current_location
 
+    if selected_location is None:
+        return go.Figure()  # Empty figure if no location
 
-# Callback to update the graph based on selected location
-@app.callback(Output("lmp-graph", "figure"), [Input("location-dropdown", "value")])
-def update_graph(selected_location):
+    # Re-load the CSV here too for the most up-to-date data during auto-refreshes
+    dashboard_df = pd.read_csv("plot.csv")
+    dashboard_df["datetime"] = pd.to_datetime(dashboard_df["datetime"])
+
     # Filter data for the selected location
     filtered_df = dashboard_df[
         dashboard_df["location"] == selected_location
@@ -74,10 +98,9 @@ def update_graph(selected_location):
     historical = filtered_df[filtered_df["lmp"].notna()]
     predictions = filtered_df[filtered_df["predictions"].notna()]
 
-    # Create the figure
+    # Create the figure (same as your original)
     fig = go.Figure()
 
-    # Add actual LMP line
     fig.add_trace(
         go.Scatter(
             x=historical["datetime"],
@@ -89,7 +112,7 @@ def update_graph(selected_location):
     )
 
     if not predictions.empty:
-        # Add outer band (0.1 - 0.9)
+        # Outer band (0.1 - 0.9)
         fig.add_trace(
             go.Scatter(
                 x=predictions["datetime"],
@@ -111,7 +134,7 @@ def update_graph(selected_location):
             )
         )
 
-        # Add inner band (0.3 - 0.7)
+        # Inner band (0.3 - 0.7)
         fig.add_trace(
             go.Scatter(
                 x=predictions["datetime"],
@@ -133,7 +156,7 @@ def update_graph(selected_location):
             )
         )
 
-        # Add median prediction line (using 'predictions' which is 0.5)
+        # Median prediction
         fig.add_trace(
             go.Scatter(
                 x=predictions["datetime"],
@@ -144,7 +167,7 @@ def update_graph(selected_location):
             )
         )
 
-    # Update layout for sleek dark theme
+    # Layout (same as original)
     fig.update_layout(
         title=f"RealTime LMP Data for {selected_location}",
         xaxis_title="Datetime",
@@ -169,7 +192,7 @@ def update_graph(selected_location):
             ),
             rangeslider=dict(visible=True, bgcolor="#161b22", bordercolor="#30363d"),
             type="date",
-            range=[min_dt, max_dt],  # Initial range: last 24 hours
+            range=[min_dt, max_dt],
         ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(l=40, r=40, t=40, b=40),
