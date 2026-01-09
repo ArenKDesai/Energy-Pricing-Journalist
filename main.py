@@ -11,7 +11,10 @@ from src.prediction import generate_predictions
 break_flag = False
 
 
-def redo_predictions():
+def redo_predictions() -> None:
+    """
+    Run Chronos2 for new predictions and generate `plot.csv`.
+    """
     global break_flag
     if not break_flag:
         start = time.time()
@@ -28,6 +31,9 @@ def redo_predictions():
 
 
 def main():
+    """
+    Main function. Scrape LMP contour map for data and generate table and predictions. 
+    """
     # Get first prices df to start permanent fetching
     last_df = reload_prices_df()
     print(last_df.head())
@@ -37,8 +43,10 @@ def main():
     fetcher = pricing_fetcher()
     for df in fetcher:
         if not records_equal(df, last_df):
-            print(df.head())
+            start = time.time()
             update_database(df)
+            end = time.time()
+            print(f"{datetime.now().ctime()}\tDuckdb update took {end - start:0.2f}s")
             redo_predictions()
             last_df = df.clone()
 

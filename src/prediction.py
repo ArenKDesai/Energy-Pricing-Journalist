@@ -6,6 +6,14 @@ import pandas as pd
 
 
 def __snap_and_interpolate(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Docstring for __snap_and_interpolate
+    
+    :param df: Description
+    :type df: pl.DataFrame
+    :return: Description
+    :rtype: pl.DataFrame
+    """
     # Step 1: Snap datetime to nearest 5-minute interval
     df_snapped = df.with_columns(
         pl.col("datetime").dt.round("5m").alias("datetime_snapped")
@@ -45,6 +53,9 @@ def __snap_and_interpolate(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def generate_predictions():
+    """
+    Docstring for generate_predictions
+    """
     accelerator = "cuda" if torch.cuda.is_available() else "cpu"
     pipeline = Chronos2Pipeline.from_pretrained(
         "amazon/chronos-2", device_map=accelerator
