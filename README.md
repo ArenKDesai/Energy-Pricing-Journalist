@@ -26,3 +26,5 @@ The duckdb persistent table will be stored in `prices.db`.
 2026-01-06 20:19: Due to restarting the server and occasional maintenance, the RT LMP records have gaps where they weren't recorded. I'll use interpolation to fill these gaps so Chronos2 won't get tripped up. 
 
 2026-01-08 21:08: Break flag for ML inference was always set. This was due to reversed boolean logic tracking time having passed. 
+
+2026-01-08 23:53: Frontend and backend hybrid deployment working well, but pushes to the main branch would cause rapid re-compilation of the frontend in the cloud. Will start making bugfix and feature branches to merge onto main.

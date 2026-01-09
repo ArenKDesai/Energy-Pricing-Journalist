@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY frontend_requirements.txt .
-RUN uv pip install --no-cache -r requirements.txt
+RUN uv pip install --no-cache -r frontend_requirements.txt
 
 # Copy only what the frontend needs
 COPY app.py .
