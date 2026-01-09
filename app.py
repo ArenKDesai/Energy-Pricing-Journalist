@@ -82,7 +82,7 @@ def update_graph(selected_location, n_intervals, current_location):
         return go.Figure()  # Empty figure if no location
 
     # Re-load the CSV here too for the most up-to-date data during auto-refreshes
-    dashboard_df = pd.read_csv("plot.csv")
+    dashboard_df = pd.read_csv("plot.parquet")
     dashboard_df["datetime"] = pd.to_datetime(dashboard_df["datetime"])
 
     # Filter data for the selected location
