@@ -19,4 +19,4 @@ COPY app.py .
 
 EXPOSE 8050
 
-CMD ["uv", "run", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8050", "app:server"]

@@ -7,7 +7,7 @@ import requests
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
-
+server = app.server  # Add this line
 
 DATA_URL = "https://pub-64bb320981ca4bebbdb6ef3c42db701b.r2.dev/plot.parquet"
 
@@ -227,4 +227,4 @@ def update_graph(selected_location, n_intervals, current_location):
 
 # Run the app
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050)
+    app.run(host="0.0.0.0", port=8050, debug=True)
