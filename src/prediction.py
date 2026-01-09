@@ -1,4 +1,5 @@
 import polars as pl
+import duckdb
 from chronos import Chronos2Pipeline
 import torch
 import pandas as pd
@@ -58,8 +59,13 @@ def __snap_and_interpolate(df: pl.DataFrame) -> pl.DataFrame:
 def generate_predictions():
     accelerator = "cuda" if torch.cuda.is_available() else "cpu"
     pipeline = Chronos2Pipeline.from_pretrained("amazon/chronos-2", device_map=accelerator)
+    
+    conn = duckdb.connect("prices.db")
+    all_prices_pd = conn.sql("SELECT * FROM pricing_history").df()
+    all_prices = pl.from_pandas(all_prices_pd)
+    conn.close()
 
-    all_prices = pl.read_parquet("data.parquet").drop(["mlc", "mcc", "status_code"])
+    # all_prices = pl.read_parquet("data.parquet").drop(["mlc", "mcc", "status_code"])
     all_prices = all_prices.with_columns(pl.col("datetime").dt.convert_time_zone("America/Chicago"))
 
     df = __snap_and_interpolate(all_prices)
