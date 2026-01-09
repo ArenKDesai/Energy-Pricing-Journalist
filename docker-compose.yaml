@@ -6,6 +6,8 @@ services:
     command: uv run main.py
     stdin_open: true
     tty: true
+    env_file:
+      - .env
   frontend:
     build: .
     volumes:

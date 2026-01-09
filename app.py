@@ -2,14 +2,35 @@ import dash
 from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
+import io
+import requests
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
 
+
+DATA_URL = "https://pub-64bb320981ca4bebbdb6ef3c42db701b.r2.dev/plot.parquet"
+
+def get_latest_data():
+    try:
+        # We use requests to get around potential header issues
+        response = requests.get(DATA_URL)
+        
+        if response.status_code == 200:
+            # Use BytesIO to turn the raw content into a file-like object for pandas
+            return pd.read_parquet(io.BytesIO(response.content))
+        else:
+            print(f"Error: Received status code {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"Fetch failed: {e}")
+        return None
+
+
 # Define a function to load data and generate layout (runs on every page load)
 def serve_layout():
     # Reload the CSV fresh every time the page is accessed
-    dashboard_df = pd.read_parquet("plot.parquet")
+    dashboard_df = get_latest_data()
     dashboard_df["datetime"] = pd.to_datetime(dashboard_df["datetime"])
 
     # Get unique locations (will be up-to-date with new data)
@@ -63,8 +84,10 @@ def serve_layout():
         ],
     )
 
+
 # Assign the dynamic layout
 app.layout = serve_layout
+
 
 # Callback to update the graph (triggered by dropdown OR interval)
 @app.callback(

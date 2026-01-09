@@ -8,7 +8,7 @@ import pandas as pd
 def __snap_and_interpolate(df: pl.DataFrame) -> pl.DataFrame:
     """
     Docstring for __snap_and_interpolate
-    
+
     :param df: Description
     :type df: pl.DataFrame
     :return: Description
