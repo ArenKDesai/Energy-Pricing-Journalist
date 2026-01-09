@@ -22,8 +22,8 @@ def redo_predictions() -> None:
         dashboard_df.to_parquet("plot.parquet")
         end = time.time()
         print(f"{datetime.now().ctime()}\tPrediction took {end - start:0.2f}s")
-        if ((end - 60 * 5) <= start):
-            break_flag = True
+        if ((end - 60 * 5) >= start):    # if it took longer than 5 minutes,
+            break_flag = True           # stop so data pipeline doesn't lag. 
     else:
         print(f"{datetime.now().ctime()}\tWARNING: BREAK FLAG IS SET. NO PREDICTIONS")
 
