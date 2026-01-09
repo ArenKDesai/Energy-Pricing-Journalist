@@ -8,12 +8,12 @@ services:
     tty: true
     env_file:
       - .env
-  frontend:
-    build: .
-    volumes:
-      - .:/app
-    command: uv run app.py
-    stdin_open: true
-    tty: true
-    ports:
-      - "8050:8050"
+  # frontend:
+  #   build: .
+  #   volumes:
+  #     - .:/app
+  #   command: uv run app.py
+  #   stdin_open: true
+  #   tty: true
+  #   ports:
+  #     - "8050:8050"
