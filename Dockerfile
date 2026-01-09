@@ -18,5 +18,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim curl ca-certificates \ 
     && rm -rf /var/lib/apt/lists/*
 
-# The command remains the same
 CMD ["python", "main.py"]
