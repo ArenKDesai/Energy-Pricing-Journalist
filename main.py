@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import time
+
 # local
 from src.pricing import reload_prices_df, pricing_fetcher
 from src.utils import records_equal
@@ -17,12 +18,12 @@ def redo_predictions():
         dashboard_df = generate_predictions()
         dashboard_df.to_csv("plot.csv")
         end = time.time()
-        print(f"{datetime.now().ctime()}\tPrediction took {end-start:0.2f}s")
+        print(f"{datetime.now().ctime()}\tPrediction took {end - start:0.2f}s")
     else:
         print(f"{datetime.now().ctime()}\tWARNING: BREAK FLAG IS SET. NO PREDICTIONS")
 
     # If this takes 5 minutes or longer, stop it so we don't lose LMPs
-    if ((end - 60 * 5) <= start):
+    if (end - 60 * 5) <= start:
         break_flag = True
 
 

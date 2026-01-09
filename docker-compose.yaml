@@ -1,8 +1,17 @@
 services:
-  analytics:
+  backend:
     build: .
     volumes:
       - .:/app
-    command: python main.py
+    command: uv run main.py
     stdin_open: true
     tty: true
+  frontend:
+    build: .
+    volumes:
+      - .:/app
+    command: uv run app.py
+    stdin_open: true
+    tty: true
+    ports:
+      - "8050:8050"
