@@ -7,8 +7,8 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN uv pip install --no-cache -r requirements.txt
+COPY backend_requirements.txt .
+RUN uv pip install --no-cache -r backend_requirements.txt
 
 # Backend needs the source code and the main script
 COPY src/ ./src/

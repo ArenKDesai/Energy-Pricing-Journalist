@@ -30,6 +30,7 @@ def redo_predictions() -> None:
     Run Chronos2 for new predictions and generate `plot.csv`.
     """
     global break_flag
+
     if not break_flag:
         start = time.time()
         dashboard_df = generate_predictions()

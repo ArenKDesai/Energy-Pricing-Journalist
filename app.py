@@ -7,7 +7,7 @@ import requests
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
-
+server = app.server  # Add this line
 
 DATA_URL = "https://pub-64bb320981ca4bebbdb6ef3c42db701b.r2.dev/plot.parquet"
 
