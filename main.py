@@ -22,12 +22,13 @@ def redo_predictions() -> None:
         dashboard_df.to_csv("plot.csv")
         end = time.time()
         print(f"{datetime.now().ctime()}\tPrediction took {end - start:0.2f}s")
+        if ((end - 60 * 5) <= start):
+            break_flag = True
     else:
         print(f"{datetime.now().ctime()}\tWARNING: BREAK FLAG IS SET. NO PREDICTIONS")
 
     # If this takes 5 minutes or longer, stop it so we don't lose LMPs
-    if (end - 60 * 5) <= start:
-        break_flag = True
+    
 
 
 def main():
