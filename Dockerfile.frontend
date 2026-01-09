@@ -1,0 +1,22 @@
+FROM python:3.13-slim
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_SYSTEM_PYTHON=1
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN uv pip install --no-cache -r requirements.txt
+
+# Copy only what the frontend needs
+COPY app.py .
+# Note: Since the frontend pulls from S3/R2 URL, it doesn't need 'src' 
+# unless app.py imports from it.
+
+EXPOSE 8050
+
+CMD ["uv", "run", "app.py"]
