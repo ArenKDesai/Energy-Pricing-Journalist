@@ -36,7 +36,6 @@ def main():
     """
     # Get first prices df to start permanent fetching
     last_df = reload_prices_df()
-    print(last_df.head())
     update_database(last_df)
 
     # Loop for new data

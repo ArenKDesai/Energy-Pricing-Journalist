@@ -157,7 +157,7 @@ def update_graph(selected_location):
             rangeselector=dict(
                 buttons=list(
                     [
-                        dict(count=12, label="12h", step="hour", stepmode="backward"),
+                        dict(count=6, label="6h", step="hour", stepmode="backward"),
                         dict(count=1, label="1d", step="day", stepmode="backward"),
                         dict(count=7, label="1w", step="day", stepmode="backward"),
                         dict(step="all"),
