@@ -1,3 +1,6 @@
+# ENERGY PRICING JOURNALIST
+https://energy-pricing-journalist.onrender.com/
+
 # Instructions
 Run `docker compose up -d`.
 

@@ -9,7 +9,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies
-COPY requirements.txt .
+COPY frontend_requirements.txt .
 RUN uv pip install --no-cache -r requirements.txt
 
 # Copy only what the frontend needs
