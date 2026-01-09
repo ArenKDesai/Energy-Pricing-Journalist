@@ -107,9 +107,9 @@ def update_graph(selected_location):
     
     # Update layout for sleek dark theme
     fig.update_layout(
-        title=f'LMP Data for {selected_location}',
+        title=f'RealTime LMP Data for {selected_location}',
         xaxis_title='Datetime',
-        yaxis_title='Price ($)',
+        yaxis_title='Price ($/MWh)',
         template='plotly_dark',
         plot_bgcolor='#0d1117',
         paper_bgcolor='#0d1117',

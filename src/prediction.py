@@ -81,8 +81,7 @@ def generate_predictions():
 
     # TODO: future warning
     full_df = context_df.copy()
-    full_df["predictions"] = None
-    for col in ["0.1", "0.3", "0.5", "0.7", "0.9"]:
+    for col in ["0.1", "0.3", "0.5", "0.7", "0.9", "predictions"]:
         full_df[col] = None
     pred_df["lmp"] = None
 
@@ -93,9 +92,10 @@ def generate_predictions():
 
     # If there is at least one NaN in predictions
     if pd.notna(last_stamp):
-        # Fill the predictions value at that exact row with the corresponding lmp
-        dashboard_df.loc[dashboard_df["datetime"] == last_stamp, "predictions"] = (
-            dashboard_df.loc[dashboard_df["datetime"] == last_stamp, "lmp"]
-        )
+        for col in ["0.1", "0.3", "0.5", "0.7", "0.9", "predictions"]:
+            # Fill the predictions value at that exact row with the corresponding lmp
+            dashboard_df.loc[dashboard_df["datetime"] == last_stamp, col] = (
+                dashboard_df.loc[dashboard_df["datetime"] == last_stamp, "lmp"]
+            )
 
     return dashboard_df
