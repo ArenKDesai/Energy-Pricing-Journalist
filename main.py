@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import time
 import boto3
 from dotenv import load_dotenv
+import polars as pl
 
 # local
 from src.pricing import reload_prices_df, pricing_fetcher
@@ -34,6 +35,12 @@ def redo_predictions() -> None:
     if not break_flag:
         start = time.time()
         dashboard_df = generate_predictions()
+
+        # limit to 2 weeks
+        last_timestamp = dashboard_df["datetime"].max()
+        two_weeks = last_timestamp - timedelta(days=14)
+        dashboard_df = dashboard_df.filter(pl.col("datetime") >= two_weeks)
+
         dashboard_df.to_parquet("plot.parquet")
         upload_to_cloud()  # Push the new data
         end = time.time()
