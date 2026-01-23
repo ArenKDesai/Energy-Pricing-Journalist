@@ -39,7 +39,7 @@ def redo_predictions() -> None:
         # limit to 2 weeks
         last_timestamp = dashboard_df["datetime"].max()
         two_weeks = last_timestamp - timedelta(days=14)
-        dashboard_df = dashboard_df.filter(pl.col("datetime") >= two_weeks)
+        dashboard_df = dashboard_df[dashboard_df["datetime"] >= two_weeks]
 
         dashboard_df.to_parquet("plot.parquet")
         upload_to_cloud()  # Push the new data
