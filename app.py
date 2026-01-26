@@ -77,9 +77,18 @@ def serve_layout():
             html.Div(
                 [
                     html.P(
-                        "This dashboard displays Real-Time LMP (Locational Marginal Price) data for "
-                        "300+ MISO locations, showing historical prices alongside future predictions "
-                        "with uncertainty bands.",
+                        [
+                            "This dashboard displays Real-Time LMP (Locational Marginal Price) data for "
+                            "300+ MISO locations, showing historical prices alongside future predictions "
+                            "with uncertainty bands. ",
+                            html.Br(),
+                            html.A(
+                                "View Source Code on GitHub",
+                                href="https://github.com/ArenKDesai/Energy-Pricing-Journalist",
+                                target="_blank",
+                                style={"color": "#58a6ff", "textDecoration": "none"},
+                            ),
+                        ],
                         style={"fontSize": "16px", "marginTop": "20px"},
                     ),
                 ],
