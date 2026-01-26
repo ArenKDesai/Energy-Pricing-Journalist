@@ -74,6 +74,32 @@ def serve_layout():
                 },
             ),
             dcc.Graph(id="lmp-graph", style={"height": "600px"}),
+            html.Div(
+                [
+                    html.P(
+                        "This dashboard displays Real-Time LMP (Locational Marginal Price) data for "
+                        "300+ MISO locations, showing historical prices alongside future predictions "
+                        "with uncertainty bands.",
+                        style={"fontSize": "16px", "marginTop": "20px"},
+                    ),
+                    html.Button(
+                        "Download plot.parquet",
+                        id="btn_parquet",
+                        style={
+                            "backgroundColor": "#238636",
+                            "color": "#ffffff",
+                            "border": "none",
+                            "padding": "10px 20px",
+                            "fontSize": "16px",
+                            "cursor": "pointer",
+                            "marginTop": "10px",
+                            "borderRadius": "6px",
+                        },
+                    ),
+                    dcc.Download(id="download-parquet"),
+                ],
+                style={"textAlign": "center", "marginTop": "20px"},
+            ),
             # Hidden interval for auto-refresh every 4 minutes (240000 ms)
             dcc.Interval(
                 id="auto-refresh-interval",
@@ -223,6 +249,15 @@ def update_graph(selected_location, n_intervals, current_location):
     )
 
     return fig
+
+
+@app.callback(
+    Output("download-parquet", "data"),
+    Input("btn_parquet", "n_clicks"),
+    prevent_initial_call=True,
+)
+def download_file(n_clicks):
+    return dcc.send_file("plot.parquet")
 
 
 # Run the app
