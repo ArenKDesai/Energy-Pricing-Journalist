@@ -9,14 +9,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Install dependencies
-COPY frontend_requirements.txt .
-RUN uv pip install --no-cache -r frontend_requirements.txt
+COPY . .
+RUN uv pip install --no-cache -r requirements.txt
 
-# Copy only what the frontend needs
-COPY app.py .
-# Note: Since the frontend pulls from S3/R2 URL, it doesn't need 'src' 
-# unless app.py imports from it.
-
-EXPOSE 8050
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8050", "app:server"]
+CMD ["uv", "run", "main.py"]
