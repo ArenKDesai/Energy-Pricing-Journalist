@@ -62,7 +62,7 @@ def main():
     update_database(last_df)
 
     # Loop for new data
-    df = pricing_fetcher()
+    # df = pricing_fetcher()
     print(f"{datetime.now().ctime()}\tDuckdb update took {end - start:0.2f}s")
 
 
