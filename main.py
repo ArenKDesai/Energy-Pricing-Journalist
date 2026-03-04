@@ -42,7 +42,7 @@ def redo_predictions() -> None:
         dashboard_df = dashboard_df[dashboard_df["datetime"] >= two_weeks]
 
         dashboard_df.to_parquet("plot.parquet")
-        upload_to_cloud()  # Push the new data
+        # upload_to_cloud()  # Push the new data
         end = time.time()
 
         # If this takes 5 minutes or longer, stop it so we don't lose LMPs
