@@ -62,15 +62,8 @@ def main():
     update_database(last_df)
 
     # Loop for new data
-    fetcher = pricing_fetcher()
-    for df in fetcher:
-        if not records_equal(df, last_df):
-            start = time.time()
-            update_database(df)
-            end = time.time()
-            print(f"{datetime.now().ctime()}\tDuckdb update took {end - start:0.2f}s")
-            redo_predictions()
-            last_df = df.clone()
+    df = pricing_fetcher()
+    print(f"{datetime.now().ctime()}\tDuckdb update took {end - start:0.2f}s")
 
 
 if __name__ == "__main__":

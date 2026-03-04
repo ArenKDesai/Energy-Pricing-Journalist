@@ -89,7 +89,7 @@ def pricing_fetcher() -> Iterator[pl.DataFrame]:
             raise Exception("Too many retries - something isn't working.")
         try:
             df = reload_prices_df()
-            yield df
+            return df
             attempts = 0
             time.sleep(TIME_BETWEEN_FETCHES)
         except Exception as e:
