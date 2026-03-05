@@ -1,13 +1,13 @@
 import requests
 import polars as pl
 from datetime import datetime, timezone
-import zoneinfo
 import time
 from typing import Iterator
 
 
 TIME_BETWEEN_FETCHES = 60  # 1 minute
 TOTAL_RETRIES = 3
+RETRY_BACKOFF_SECONDS = [5, 60, 180]
 
 
 def __get_prices(hub: bool) -> pl.DataFrame:
@@ -76,6 +76,31 @@ def reload_prices_df() -> pl.DataFrame:
     return nodes
 
 
+def fetch_prices_with_retry(total_retries: int = TOTAL_RETRIES) -> pl.DataFrame:
+    """
+    Fetch a single RT LMP snapshot with retry/backoff.
+
+    :param total_retries: Maximum retry attempts after the first failed call.
+    :type total_retries: int
+    :return: Prices dataframe.
+    :rtype: pl.DataFrame
+    """
+    attempts = 0
+    while True:
+        try:
+            return reload_prices_df()
+        except Exception as e:
+            attempts += 1
+            if attempts > total_retries:
+                raise RuntimeError(
+                    f"Failed to fetch prices after {total_retries} retries"
+                ) from e
+
+            sleep_seconds = RETRY_BACKOFF_SECONDS[min(attempts - 1, len(RETRY_BACKOFF_SECONDS) - 1)]
+            print(f"Exception raised: {e}; retrying in {sleep_seconds}s (attempt {attempts}/{total_retries})")
+            time.sleep(sleep_seconds)
+
+
 def pricing_fetcher() -> Iterator[pl.DataFrame]:
     """
     Fetches RT LMP data forever.
@@ -83,24 +108,6 @@ def pricing_fetcher() -> Iterator[pl.DataFrame]:
     :return: Current RT LMP records to be downloaded and stored.
     :rtype: Iterator[DataFrame]
     """
-    attempts = 0
     while True:
-        if attempts > TOTAL_RETRIES:
-            raise Exception("Too many retries - something isn't working.")
-        try:
-            df = reload_prices_df()
-            return df
-            attempts = 0
-            time.sleep(TIME_BETWEEN_FETCHES)
-        except Exception as e:
-            print(f"Exception raised: {e}")
-            attempts += 1
-
-            # Wait and see if the error is resolved
-            match attempts:
-                case 1:
-                    time.sleep(5)
-                case 2:
-                    time.sleep(60)
-                case _:
-                    time.sleep(60 * 5)
+        yield fetch_prices_with_retry(TOTAL_RETRIES)
+        time.sleep(TIME_BETWEEN_FETCHES)

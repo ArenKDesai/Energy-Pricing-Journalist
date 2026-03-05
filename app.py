@@ -11,11 +11,12 @@ server = app.server  # Add this line
 
 DATA_URL = "https://pub-64bb320981ca4bebbdb6ef3c42db701b.r2.dev/plot.parquet"
 
+
 def get_latest_data():
     try:
         # We use requests to get around potential header issues
         response = requests.get(DATA_URL)
-        
+
         if response.status_code == 200:
             # Use BytesIO to turn the raw content into a file-like object for pandas
             return pd.read_parquet(io.BytesIO(response.content))
@@ -243,9 +244,6 @@ def update_graph(selected_location, n_intervals, current_location):
     )
 
     return fig
-
-
-
 
 
 # Run the app

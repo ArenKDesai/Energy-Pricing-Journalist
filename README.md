@@ -10,7 +10,7 @@ A real-time energy market monitoring and forecasting system for MISO (Midcontine
 ## Key Features
 
 ### 🚀 High-Frequency Data Pipeline (`Polars` + `DuckDB`)
-- **Real-Time Ingestion**: continuously scrapes live LMP contour maps to capture market ticks as they happen.
+- **Real-Time Ingestion**: fetches one live LMP snapshot per run (recommended: Cloud Run Job on a 5-minute schedule).
 - **Efficient Storage**: Utilizes **DuckDB** for high-performance localized SQL querying and **Polars** for blazing fast in-memory data manipulation.
 - **Data Engineering**: Data is normalized, snapped to 5-minute intervals, and stored in optimized Parquet format for cloud persistence.
 
@@ -28,7 +28,7 @@ A real-time energy market monitoring and forecasting system for MISO (Midcontine
 The system operates on a hybrid architecture to ensure reliability and speed:
 
 1.  **Backend (Data & ML Layer)**:
-    *   A persistent worker loop fetches live market data.
+    *   A scheduled Cloud Run Job fetches one live market snapshot per invocation.
     *   New data triggers an update to the local DuckDB instance.
     *   The **Chronos** model generates fresh forecasts upon significant data updates.
     *   Processed data (historical + forecast) is exported to an S3-compatible object storage (Cloudflare R2).
