@@ -62,6 +62,7 @@ class GCSStorage(Storage):
 
     def write_json(self, data: dict) -> None:
         blob = self.bucket.blob(JSON_FILENAME)
+        blob.cache_control = "no-store"
         blob.upload_from_string(json.dumps(data), content_type="application/json")
 
 
