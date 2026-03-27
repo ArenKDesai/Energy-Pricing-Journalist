@@ -2,6 +2,8 @@
 
 Two-part system for collecting and visualizing MISO real-time energy prices.
 
+View the streamed data [here](https://storage.googleapis.com/realtime-energy-prices/index.html)
+
 ## Architecture
 
 ### collector/
