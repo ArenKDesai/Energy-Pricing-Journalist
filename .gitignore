@@ -1,9 +1,10 @@
-.venv
-.ruff_cache
-__pycache__
-*.db
+.venv/
+.ruff_cache/
+__pycache__/
 *.pyc
-*.csv
-*.parquet
 *.KEY
 .env
+
+# Local data output (tracked via data/.gitkeep)
+data/*.parquet
+data/*.json
