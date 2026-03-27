@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 *.KEY
 .env
+.claude
+.claude/*
 
 # Local data output (tracked via data/.gitkeep)
 data/*.parquet

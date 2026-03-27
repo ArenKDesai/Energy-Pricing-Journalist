@@ -1,125 +1,147 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MISO RT LMP</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>MISO RT LMP</title>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
 
-    body {
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: Arial, sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+            body {
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: Arial, sans-serif;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
 
-    #header {
-      flex: 0 0 auto;
-      padding: 14px 20px 10px;
-      border-bottom: 1px solid #21262d;
-    }
+            #header {
+                flex: 0 0 auto;
+                padding: 14px 20px 10px;
+                border-bottom: 1px solid #21262d;
+            }
 
-    h1 {
-      color: #aaf0c1;
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
+            h1 {
+                color: #aaf0c1;
+                font-size: 20px;
+                margin-bottom: 8px;
+            }
 
-    #controls {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
+            #controls {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                flex-wrap: wrap;
+            }
 
-    label { font-size: 14px; }
+            label {
+                font-size: 14px;
+            }
 
-    select {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      padding: 4px 8px;
-      font-size: 14px;
-      margin-left: 6px;
-      border-radius: 4px;
-    }
+            select {
+                background: #161b22;
+                color: #c9d1d9;
+                border: 1px solid #30363d;
+                padding: 4px 8px;
+                font-size: 14px;
+                margin-left: 6px;
+                border-radius: 4px;
+            }
 
-    #status {
-      font-size: 13px;
-      color: #8b949e;
-    }
+            #status {
+                font-size: 13px;
+                color: #8b949e;
+            }
 
-    #chart-container {
-      flex: 1;
-      position: relative;
-      min-height: 0;
-    }
+            #chart-container {
+                flex: 1;
+                position: relative;
+                min-height: 0;
+            }
 
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+            canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
 
-    .axis-label {
-      position: absolute;
-      font-size: 11px;
-      color: #8b949e;
-      pointer-events: none;
-      white-space: nowrap;
-    }
+            .axis-label {
+                position: absolute;
+                font-size: 11px;
+                color: #8b949e;
+                pointer-events: none;
+                white-space: nowrap;
+            }
 
-    #y-max { top: 6px; right: 8px; }
-    #y-min { bottom: 6px; right: 8px; }
-    #x-start { bottom: 6px; left: 8px; }
-    #x-end { bottom: 6px; right: 80px; }
+            #y-max {
+                top: 6px;
+                right: 8px;
+            }
+            #y-min {
+                bottom: 6px;
+                right: 8px;
+            }
+            #x-start {
+                bottom: 6px;
+                left: 8px;
+            }
+            #x-end {
+                bottom: 6px;
+                right: 80px;
+            }
 
-    #error-msg {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #f85149;
-      font-size: 15px;
-      text-align: center;
-      max-width: 400px;
-      line-height: 1.5;
-    }
-  </style>
-</head>
-<body>
-  <div id="header">
-    <h1>MISO Real-Time LMP</h1>
-    <div id="controls">
-      <label>Location: <select id="location-select"></select></label>
-      <span id="status">Loading...</span>
-    </div>
-  </div>
+            #error-msg {
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: #f85149;
+                font-size: 15px;
+                text-align: center;
+                max-width: 400px;
+                line-height: 1.5;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="header">
+            <h1>MISO Real-Time LMP</h1>
+            <div id="controls">
+                <label
+                    >Location:
+                    <select id="location-select"></select
+                ></label>
+                <span id="status">Loading...</span>
+            </div>
+        </div>
 
-  <div id="chart-container">
-    <canvas id="canvas"></canvas>
-    <div id="y-max" class="axis-label"></div>
-    <div id="y-min" class="axis-label"></div>
-    <div id="x-start" class="axis-label"></div>
-    <div id="x-end" class="axis-label"></div>
-    <div id="error-msg"></div>
-  </div>
+        <div id="chart-container">
+            <canvas id="canvas"></canvas>
+            <div id="y-max" class="axis-label"></div>
+            <div id="y-min" class="axis-label"></div>
+            <div id="x-start" class="axis-label"></div>
+            <div id="x-end" class="axis-label"></div>
+            <div id="error-msg"></div>
+        </div>
 
-  <script type="module">
-    // --- Configuration ---
-    // For local dev (docker compose): leave as-is.
-    // For GCP deployment: set to your bucket's public URL, e.g.:
-    //   const DATA_URL = 'https://storage.googleapis.com/YOUR_BUCKET/latest.json';
-    const DATA_URL = '/latest.json';
-    const REFRESH_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes
+        <script type="module">
+            // --- Configuration ---
+            // For local dev (docker compose): leave as-is.
+            // For GCP deployment: set to your bucket's public URL, e.g.:
+            const DATA_URL =
+                "https://storage.googleapis.com/realtime-energy-prices/latest.json";
+            // const DATA_URL = '/latest.json';
+            const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-    // --- WGSL shaders ---
-    const SHADER = `
+            // --- WGSL shaders ---
+            const SHADER = `
       @vertex
       fn vs(@location(0) xy: vec2f) -> @builtin(position) vec4f {
         return vec4f(xy, 0.0, 1.0);
@@ -131,204 +153,247 @@
       }
     `;
 
-    // --- State ---
-    let device = null;
-    let context = null;
-    let pipeline = null;
-    let canvasFormat = null;
-    let currentData = null;
+            // --- State ---
+            let device = null;
+            let context = null;
+            let pipeline = null;
+            let canvasFormat = null;
+            let currentData = null;
 
-    const canvas = document.getElementById('canvas');
-    const locationSelect = document.getElementById('location-select');
-    const statusEl = document.getElementById('status');
-    const errorEl = document.getElementById('error-msg');
-    const yMaxEl = document.getElementById('y-max');
-    const yMinEl = document.getElementById('y-min');
-    const xStartEl = document.getElementById('x-start');
-    const xEndEl = document.getElementById('x-end');
+            const canvas = document.getElementById("canvas");
+            const locationSelect = document.getElementById("location-select");
+            const statusEl = document.getElementById("status");
+            const errorEl = document.getElementById("error-msg");
+            const yMaxEl = document.getElementById("y-max");
+            const yMinEl = document.getElementById("y-min");
+            const xStartEl = document.getElementById("x-start");
+            const xEndEl = document.getElementById("x-end");
 
-    function showError(msg) {
-      errorEl.style.display = 'block';
-      errorEl.textContent = msg;
-      statusEl.textContent = 'Error';
-    }
+            function showError(msg) {
+                errorEl.style.display = "block";
+                errorEl.textContent = msg;
+                statusEl.textContent = "Error";
+            }
 
-    function setStatus(msg) {
-      statusEl.textContent = msg;
-    }
+            function setStatus(msg) {
+                statusEl.textContent = msg;
+            }
 
-    // --- WebGPU init ---
-    async function initWebGPU() {
-      if (!navigator.gpu) {
-        showError('WebGPU is not supported in this browser.\nTry Chrome 113+, Edge 113+, or Firefox Nightly.');
-        return false;
-      }
+            // --- WebGPU init ---
+            async function initWebGPU() {
+                if (!navigator.gpu) {
+                    showError(
+                        "WebGPU is not supported in this browser.\nTry Chrome 113+, Edge 113+, or Firefox Nightly.",
+                    );
+                    return false;
+                }
 
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) {
-        showError('No WebGPU adapter found. Your GPU may not be supported.');
-        return false;
-      }
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) {
+                    showError(
+                        "No WebGPU adapter found. Your GPU may not be supported.",
+                    );
+                    return false;
+                }
 
-      device = await adapter.requestDevice();
-      context = canvas.getContext('webgpu');
-      canvasFormat = navigator.gpu.getPreferredCanvasFormat();
-      context.configure({ device, format: canvasFormat, alphaMode: 'opaque' });
+                device = await adapter.requestDevice();
+                context = canvas.getContext("webgpu");
+                canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({
+                    device,
+                    format: canvasFormat,
+                    alphaMode: "opaque",
+                });
 
-      const shaderModule = device.createShaderModule({ code: SHADER });
+                const shaderModule = device.createShaderModule({
+                    code: SHADER,
+                });
 
-      pipeline = device.createRenderPipeline({
-        layout: 'auto',
-        vertex: {
-          module: shaderModule,
-          entryPoint: 'vs',
-          buffers: [{
-            arrayStride: 8,  // 2 × float32
-            attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }],
-          }],
-        },
-        fragment: {
-          module: shaderModule,
-          entryPoint: 'fs',
-          targets: [{ format: canvasFormat }],
-        },
-        primitive: { topology: 'line-strip' },
-      });
+                pipeline = device.createRenderPipeline({
+                    layout: "auto",
+                    vertex: {
+                        module: shaderModule,
+                        entryPoint: "vs",
+                        buffers: [
+                            {
+                                arrayStride: 8, // 2 × float32
+                                attributes: [
+                                    {
+                                        shaderLocation: 0,
+                                        offset: 0,
+                                        format: "float32x2",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    fragment: {
+                        module: shaderModule,
+                        entryPoint: "fs",
+                        targets: [{ format: canvasFormat }],
+                    },
+                    primitive: { topology: "line-strip" },
+                });
 
-      return true;
-    }
+                return true;
+            }
 
-    // --- Rendering ---
-    function renderSeries(seriesPoints) {
-      if (!device || !pipeline || !seriesPoints || seriesPoints.length < 2) return;
+            // --- Rendering ---
+            function renderSeries(seriesPoints) {
+                if (
+                    !device ||
+                    !pipeline ||
+                    !seriesPoints ||
+                    seriesPoints.length < 2
+                )
+                    return;
 
-      // seriesPoints: [[unix_ts, lmp], ...]
-      const times = seriesPoints.map(p => p[0]);
-      const lmps  = seriesPoints.map(p => p[1]);
-      const tMin = Math.min(...times), tMax = Math.max(...times);
-      const lmpMin = Math.min(...lmps), lmpMax = Math.max(...lmps);
-      const lmpRange = lmpMax - lmpMin || 1;
-      const tRange = tMax - tMin || 1;
+                // seriesPoints: [[unix_ts, lmp], ...]
+                const times = seriesPoints.map((p) => p[0]);
+                const lmps = seriesPoints.map((p) => p[1]);
+                const tMin = Math.min(...times),
+                    tMax = Math.max(...times);
+                const lmpMin = Math.min(...lmps),
+                    lmpMax = Math.max(...lmps);
+                const lmpRange = lmpMax - lmpMin || 1;
+                const tRange = tMax - tMin || 1;
 
-      const PAD = 0.08;
-      const vertices = new Float32Array(seriesPoints.length * 2);
-      for (let i = 0; i < seriesPoints.length; i++) {
-        vertices[i * 2]     = -1 + PAD + (seriesPoints[i][0] - tMin) / tRange * (2 - 2 * PAD);
-        vertices[i * 2 + 1] = -1 + PAD + (seriesPoints[i][1] - lmpMin) / lmpRange * (2 - 2 * PAD);
-      }
+                const PAD = 0.08;
+                const vertices = new Float32Array(seriesPoints.length * 2);
+                for (let i = 0; i < seriesPoints.length; i++) {
+                    vertices[i * 2] =
+                        -1 +
+                        PAD +
+                        ((seriesPoints[i][0] - tMin) / tRange) * (2 - 2 * PAD);
+                    vertices[i * 2 + 1] =
+                        -1 +
+                        PAD +
+                        ((seriesPoints[i][1] - lmpMin) / lmpRange) *
+                            (2 - 2 * PAD);
+                }
 
-      const vBuf = device.createBuffer({
-        size: vertices.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      device.queue.writeBuffer(vBuf, 0, vertices);
+                const vBuf = device.createBuffer({
+                    size: vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                });
+                device.queue.writeBuffer(vBuf, 0, vertices);
 
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          clearValue: { r: 0.051, g: 0.067, b: 0.090, a: 1.0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-      });
-      pass.setPipeline(pipeline);
-      pass.setVertexBuffer(0, vBuf);
-      pass.draw(seriesPoints.length);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [
+                        {
+                            view: context.getCurrentTexture().createView(),
+                            clearValue: { r: 0.051, g: 0.067, b: 0.09, a: 1.0 },
+                            loadOp: "clear",
+                            storeOp: "store",
+                        },
+                    ],
+                });
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vBuf);
+                pass.draw(seriesPoints.length);
+                pass.end();
+                device.queue.submit([encoder.finish()]);
 
-      // Update axis labels
-      yMaxEl.textContent = `${lmpMax.toFixed(2)} $/MWh`;
-      yMinEl.textContent = `${lmpMin.toFixed(2)} $/MWh`;
-      xStartEl.textContent = formatTime(tMin);
-      xEndEl.textContent   = formatTime(tMax);
-    }
+                // Update axis labels
+                yMaxEl.textContent = `${lmpMax.toFixed(2)} $/MWh`;
+                yMinEl.textContent = `${lmpMin.toFixed(2)} $/MWh`;
+                xStartEl.textContent = formatTime(tMin);
+                xEndEl.textContent = formatTime(tMax);
+            }
 
-    function clearCanvas() {
-      if (!device || !context) return;
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          clearValue: { r: 0.051, g: 0.067, b: 0.090, a: 1.0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-      });
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-      yMaxEl.textContent = yMinEl.textContent = xStartEl.textContent = xEndEl.textContent = '';
-    }
+            function clearCanvas() {
+                if (!device || !context) return;
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [
+                        {
+                            view: context.getCurrentTexture().createView(),
+                            clearValue: { r: 0.051, g: 0.067, b: 0.09, a: 1.0 },
+                            loadOp: "clear",
+                            storeOp: "store",
+                        },
+                    ],
+                });
+                pass.end();
+                device.queue.submit([encoder.finish()]);
+                yMaxEl.textContent =
+                    yMinEl.textContent =
+                    xStartEl.textContent =
+                    xEndEl.textContent =
+                        "";
+            }
 
-    function formatTime(unixSeconds) {
-      return new Date(unixSeconds * 1000).toLocaleString(undefined, {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      });
-    }
+            function formatTime(unixSeconds) {
+                return new Date(unixSeconds * 1000).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                });
+            }
 
-    // --- Data loading ---
-    async function fetchData() {
-      try {
-        const resp = await fetch(DATA_URL, { cache: 'no-cache' });
-        if (!resp.ok) {
-          setStatus(`Waiting for data... (HTTP ${resp.status})`);
-          return;
-        }
-        currentData = await resp.json();
+            // --- Data loading ---
+            async function fetchData() {
+                try {
+                    const resp = await fetch(DATA_URL, { cache: "no-cache" });
+                    if (!resp.ok) {
+                        setStatus(`Waiting for data... (HTTP ${resp.status})`);
+                        return;
+                    }
+                    currentData = await resp.json();
 
-        // Populate location dropdown on first load
-        if (locationSelect.options.length === 0) {
-          currentData.locations.forEach(loc => {
-            const opt = document.createElement('option');
-            opt.value = opt.textContent = loc;
-            locationSelect.appendChild(opt);
-          });
-        }
+                    // Populate location dropdown on first load
+                    if (locationSelect.options.length === 0) {
+                        currentData.locations.forEach((loc) => {
+                            const opt = document.createElement("option");
+                            opt.value = opt.textContent = loc;
+                            locationSelect.appendChild(opt);
+                        });
+                    }
 
-        const updated = new Date(currentData.updated);
-        setStatus(`Updated: ${updated.toLocaleString()}`);
-        renderSelected();
-      } catch (e) {
-        setStatus(`Fetch error: ${e.message}`);
-      }
-    }
+                    const updated = new Date(currentData.updated);
+                    setStatus(`Updated: ${updated.toLocaleString()}`);
+                    renderSelected();
+                } catch (e) {
+                    setStatus(`Fetch error: ${e.message}`);
+                }
+            }
 
-    function renderSelected() {
-      if (!currentData) return;
-      const loc = locationSelect.value;
-      const pts = currentData.series[loc];
-      if (pts && pts.length > 0) {
-        renderSeries(pts);
-      } else {
-        clearCanvas();
-      }
-    }
+            function renderSelected() {
+                if (!currentData) return;
+                const loc = locationSelect.value;
+                const pts = currentData.series[loc];
+                if (pts && pts.length > 0) {
+                    renderSeries(pts);
+                } else {
+                    clearCanvas();
+                }
+            }
 
-    // --- Canvas resize ---
-    function onResize() {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width  = Math.floor(canvas.clientWidth  * dpr);
-      canvas.height = Math.floor(canvas.clientHeight * dpr);
-      renderSelected();
-    }
+            // --- Canvas resize ---
+            function onResize() {
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = Math.floor(canvas.clientWidth * dpr);
+                canvas.height = Math.floor(canvas.clientHeight * dpr);
+                renderSelected();
+            }
 
-    // --- Entry point ---
-    async function main() {
-      const ok = await initWebGPU();
-      if (!ok) return;
+            // --- Entry point ---
+            async function main() {
+                const ok = await initWebGPU();
+                if (!ok) return;
 
-      new ResizeObserver(onResize).observe(canvas);
-      onResize();
+                new ResizeObserver(onResize).observe(canvas);
+                onResize();
 
-      locationSelect.addEventListener('change', renderSelected);
+                locationSelect.addEventListener("change", renderSelected);
 
-      await fetchData();
-      setInterval(fetchData, REFRESH_INTERVAL_MS);
-    }
+                await fetchData();
+                setInterval(fetchData, REFRESH_INTERVAL_MS);
+            }
 
-    main();
-  </script>
-</body>
+            main();
+        </script>
+    </body>
 </html>
