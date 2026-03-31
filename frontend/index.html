@@ -127,21 +127,60 @@
 
             // --- WGSL shaders ---
             const SHADER = `
-      @vertex
-      fn vs(@location(0) xy: vec2f) -> @builtin(position) vec4f {
-        return vec4f(xy, 0.0, 1.0);
-      }
+struct VOut {
+    @builtin(position) pos: vec4f,
+    @location(0) val: f32,
+}
 
-      @fragment
-      fn fs() -> @location(0) vec4f {
-        return vec4f(0.667, 0.941, 0.757, 1.0);  // #AAF0C1
-      }
+@vertex
+fn vs(@location(0) xy: vec2f, @location(1) val: f32) -> VOut {
+    var out: VOut;
+    out.pos = vec4f(xy, 0.0, 1.0);
+    out.val = val;
+    return out;
+}
+
+// Positive: mint(#aaf0c1) → amber(#ffaa00) → deep red(#ff1a1a)
+// Negative: mint(#aaf0c1) → cyan(#00ddff) → electric purple(#8800ff)
+fn priceColor(val: f32) -> vec3f {
+    let t = clamp(abs(val), 0.0, 1.0);
+    if val >= 0.0 {
+        if t < 0.5 {
+            let s = t * 2.0;
+            return vec3f(mix(0.667, 1.0, s), mix(0.941, 0.667, s), mix(0.757, 0.0, s));
+        } else {
+            let s = (t - 0.5) * 2.0;
+            return vec3f(1.0, mix(0.667, 0.1, s), mix(0.0, 0.1, s));
+        }
+    } else {
+        if t < 0.5 {
+            let s = t * 2.0;
+            return vec3f(mix(0.667, 0.0, s), mix(0.941, 0.867, s), mix(0.757, 1.0, s));
+        } else {
+            let s = (t - 0.5) * 2.0;
+            return vec3f(mix(0.0, 0.533, s), mix(0.867, 0.0, s), 1.0);
+        }
+    }
+}
+
+@fragment
+fn fs_line(in: VOut) -> @location(0) vec4f {
+    return vec4f(priceColor(in.val), 1.0);
+}
+
+@fragment
+fn fs_fill(in: VOut) -> @location(0) vec4f {
+    let col = priceColor(in.val);
+    let a = pow(abs(in.val), 0.8) * 0.6;
+    return vec4f(col, a);
+}
     `;
 
             // --- State ---
             let device = null;
             let context = null;
-            let pipeline = null;
+            let linePipeline = null;
+            let fillPipeline = null;
             let canvasFormat = null;
             let currentData = null;
 
@@ -192,27 +231,58 @@
                     code: SHADER,
                 });
 
-                pipeline = device.createRenderPipeline({
+                // Shared vertex layout: [x, y, normVal] — 3 × float32 = 12 bytes
+                const vertexLayout = {
+                    arrayStride: 12,
+                    attributes: [
+                        { shaderLocation: 0, offset: 0, format: "float32x2" },
+                        { shaderLocation: 1, offset: 8, format: "float32" },
+                    ],
+                };
+
+                // Fill pipeline: triangle-list with src-alpha blending
+                fillPipeline = device.createRenderPipeline({
                     layout: "auto",
                     vertex: {
                         module: shaderModule,
                         entryPoint: "vs",
-                        buffers: [
-                            {
-                                arrayStride: 8, // 2 × float32
-                                attributes: [
-                                    {
-                                        shaderLocation: 0,
-                                        offset: 0,
-                                        format: "float32x2",
-                                    },
-                                ],
-                            },
-                        ],
+                        buffers: [vertexLayout],
                     },
                     fragment: {
                         module: shaderModule,
-                        entryPoint: "fs",
+                        entryPoint: "fs_fill",
+                        targets: [
+                            {
+                                format: canvasFormat,
+                                blend: {
+                                    color: {
+                                        srcFactor: "src-alpha",
+                                        dstFactor: "one-minus-src-alpha",
+                                        operation: "add",
+                                    },
+                                    alpha: {
+                                        srcFactor: "one",
+                                        dstFactor: "zero",
+                                        operation: "add",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    primitive: { topology: "triangle-list" },
+                });
+
+                // Line pipeline: line-strip, opaque
+                linePipeline = device.createRenderPipeline({
+                    layout: "auto",
+                    vertex: {
+                        module: shaderModule,
+                        entryPoint: "vs",
+                        buffers: [vertexLayout],
+                    },
+                    fragment: {
+                        module: shaderModule,
+                        entryPoint: "fs_line",
                         targets: [{ format: canvasFormat }],
                     },
                     primitive: { topology: "line-strip" },
@@ -285,7 +355,8 @@
             function renderSeries(seriesPoints, tMin, tMax, yMin, yMax) {
                 if (
                     !device ||
-                    !pipeline ||
+                    !linePipeline ||
+                    !fillPipeline ||
                     !seriesPoints ||
                     seriesPoints.length < 2
                 )
@@ -295,7 +366,6 @@
                 const W = canvas.width;
                 const H = canvas.height;
 
-                // Margins converted to physical pixels → clip space offsets
                 const xMinClip = -1 + (2 * MARGIN.left * dpr) / W;
                 const xMaxClip = 1 - (2 * MARGIN.right * dpr) / W;
                 const yMinClip = -1 + (2 * MARGIN.bottom * dpr) / H;
@@ -304,43 +374,113 @@
                 const tRange = tMax - tMin || 1;
                 const yRange = yMax - yMin || 1;
 
-                const vertices = new Float32Array(seriesPoints.length * 2);
-                for (let i = 0; i < seriesPoints.length; i++) {
-                    vertices[i * 2] =
-                        xMinClip +
-                        ((seriesPoints[i][0] - tMin) / tRange) *
-                            (xMaxClip - xMinClip);
-                    vertices[i * 2 + 1] =
-                        yMinClip +
-                        ((seriesPoints[i][1] - yMin) / yRange) *
-                            (yMaxClip - yMinClip);
+                function cx(t) {
+                    return (
+                        xMinClip + ((t - tMin) / tRange) * (xMaxClip - xMinClip)
+                    );
+                }
+                function cy(v) {
+                    return (
+                        yMinClip + ((v - yMin) / yRange) * (yMaxClip - yMinClip)
+                    );
                 }
 
-                const vBuf = device.createBuffer({
-                    size: vertices.byteLength,
+                // Normalize prices to [-1, 1] based on max absolute price.
+                // normVal(0) = 0; normVal(maxPrice) = +1; normVal(minPrice) = -1
+                const maxAbsPrice = Math.max(
+                    ...seriesPoints.map((p) => Math.abs(p[1])),
+                    1e-6,
+                );
+                function nv(price) {
+                    return price / maxAbsPrice;
+                }
+
+                const clipYZero = cy(0);
+
+                // --- Line vertices: [x, y, normVal] per point ---
+                const lineVerts = new Float32Array(seriesPoints.length * 3);
+                for (let i = 0; i < seriesPoints.length; i++) {
+                    lineVerts[i * 3] = cx(seriesPoints[i][0]);
+                    lineVerts[i * 3 + 1] = cy(seriesPoints[i][1]);
+                    lineVerts[i * 3 + 2] = nv(seriesPoints[i][1]);
+                }
+
+                // --- Fill vertices: triangle-list ---
+                // For each pair of adjacent points, emit a quad (2 triangles) between
+                // the price line and the zero line.  At sign changes, interpolate the
+                // zero-crossing so positive and negative fills never overlap.
+                const fillArr = [];
+                function tri(x0, y0, v0, x1, y1, v1, x2, y2, v2) {
+                    fillArr.push(x0, y0, v0, x1, y1, v1, x2, y2, v2);
+                }
+
+                for (let i = 1; i < seriesPoints.length; i++) {
+                    const xa = cx(seriesPoints[i - 1][0]);
+                    const ya = cy(seriesPoints[i - 1][1]);
+                    const va = nv(seriesPoints[i - 1][1]);
+                    const xb = cx(seriesPoints[i][0]);
+                    const yb = cy(seriesPoints[i][1]);
+                    const vb = nv(seriesPoints[i][1]);
+                    const pa = seriesPoints[i - 1][1];
+                    const pb = seriesPoints[i][1];
+                    const yZ = clipYZero;
+
+                    if (pa >= 0 === pb >= 0) {
+                        // Same side of zero — fill as a quad
+                        tri(xa, ya, va, xa, yZ, 0, xb, yb, vb);
+                        tri(xa, yZ, 0, xb, yZ, 0, xb, yb, vb);
+                    } else {
+                        // Zero crossing — split fill at the crossing point
+                        const t = pa / (pa - pb);
+                        const xC = xa + t * (xb - xa);
+                        // Segment from A to crossing (A's sign)
+                        tri(xa, ya, va, xa, yZ, 0, xC, yZ, 0);
+                        // Segment from crossing to B (B's sign)
+                        tri(xC, yZ, 0, xb, yb, vb, xb, yZ, 0);
+                    }
+                }
+
+                const fillVerts = new Float32Array(fillArr);
+
+                // --- GPU buffers ---
+                const lineBuf = device.createBuffer({
+                    size: lineVerts.byteLength,
                     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
                 });
-                device.queue.writeBuffer(vBuf, 0, vertices);
+                device.queue.writeBuffer(lineBuf, 0, lineVerts);
 
+                let fillBuf = null;
+                if (fillVerts.length > 0) {
+                    fillBuf = device.createBuffer({
+                        size: fillVerts.byteLength,
+                        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    });
+                    device.queue.writeBuffer(fillBuf, 0, fillVerts);
+                }
+
+                // --- Single render pass: fill first, then line on top ---
                 const encoder = device.createCommandEncoder();
                 const pass = encoder.beginRenderPass({
                     colorAttachments: [
                         {
                             view: context.getCurrentTexture().createView(),
-                            clearValue: {
-                                r: 0.051,
-                                g: 0.067,
-                                b: 0.09,
-                                a: 1.0,
-                            },
+                            clearValue: { r: 0.051, g: 0.067, b: 0.09, a: 1.0 },
                             loadOp: "clear",
                             storeOp: "store",
                         },
                     ],
                 });
-                pass.setPipeline(pipeline);
-                pass.setVertexBuffer(0, vBuf);
+
+                if (fillBuf) {
+                    pass.setPipeline(fillPipeline);
+                    pass.setVertexBuffer(0, fillBuf);
+                    pass.draw(fillVerts.length / 3);
+                }
+
+                pass.setPipeline(linePipeline);
+                pass.setVertexBuffer(0, lineBuf);
                 pass.draw(seriesPoints.length);
+
                 pass.end();
                 device.queue.submit([encoder.finish()]);
             }
@@ -381,25 +521,34 @@
                     if (v < yMin - yStep * 0.01 || v > yMax + yStep * 0.01)
                         continue;
                     const y = pB - ((v - yMin) / yRange) * pH;
+                    const isZero = Math.abs(v) < yStep * 0.01;
 
-                    // Gridline
-                    axesCtx.strokeStyle = "#21262d";
-                    axesCtx.lineWidth = 1;
+                    // Gridline — zero line gets a distinct dashed style
+                    if (isZero) {
+                        axesCtx.strokeStyle = "#3a4a3e";
+                        axesCtx.lineWidth = 1;
+                        axesCtx.setLineDash([5, 4]);
+                    } else {
+                        axesCtx.strokeStyle = "#21262d";
+                        axesCtx.lineWidth = 1;
+                        axesCtx.setLineDash([]);
+                    }
                     axesCtx.beginPath();
                     axesCtx.moveTo(pL, y);
                     axesCtx.lineTo(pR, y);
                     axesCtx.stroke();
+                    axesCtx.setLineDash([]);
 
                     // Tick mark
-                    axesCtx.strokeStyle = "#30363d";
+                    axesCtx.strokeStyle = isZero ? "#aaf0c1" : "#30363d";
                     axesCtx.beginPath();
                     axesCtx.moveTo(pL - 5, y);
                     axesCtx.lineTo(pL, y);
                     axesCtx.stroke();
 
                     // Label
-                    axesCtx.fillStyle = "#8b949e";
-                    axesCtx.font = "11px Arial";
+                    axesCtx.fillStyle = isZero ? "#aaf0c1" : "#8b949e";
+                    axesCtx.font = isZero ? "bold 11px Arial" : "11px Arial";
                     axesCtx.textAlign = "right";
                     axesCtx.textBaseline = "middle";
                     axesCtx.fillText(formatPrice(v, yStep), pL - 8, y);
@@ -462,7 +611,7 @@
             }
 
             function clearCanvas() {
-                if (!device || !context) return;
+                if (!device || !context || !linePipeline) return;
                 const encoder = device.createCommandEncoder();
                 const pass = encoder.beginRenderPass({
                     colorAttachments: [

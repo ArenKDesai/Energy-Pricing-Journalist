@@ -14,14 +14,14 @@ from src.storage import get_storage
 LOCAL_DEV = os.getenv("LOCAL_DEV", "").lower() in ("1", "true", "yes")
 INTERVAL_SECONDS = 300  # 5 minutes
 TWO_WEEKS = timedelta(weeks=2)
-ONE_DAY = timedelta(hours=24)
+ONE_WEEK = timedelta(weeks=1)
 MAX_JSON_LOCATIONS = 20
 
 
 def build_json(df: pl.DataFrame) -> dict:
     """Build the latest.json payload consumed by the frontend."""
-    cutoff_24h = datetime.now(CHICAGO_TZ) - ONE_DAY
-    recent = df.filter(pl.col("datetime") >= cutoff_24h)
+    cutoff_1w = datetime.now(CHICAGO_TZ) - ONE_WEEK
+    recent = df.filter(pl.col("datetime") >= cutoff_1w)
 
     # Prefer HUB nodes; fall back to all locations
     hubs = recent.filter(pl.col("location").str.to_uppercase().str.contains("HUB"))
