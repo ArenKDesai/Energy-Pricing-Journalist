@@ -71,29 +71,13 @@
                 display: block;
             }
 
-            .axis-label {
+            #axes-canvas {
                 position: absolute;
-                font-size: 11px;
-                color: #8b949e;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
                 pointer-events: none;
-                white-space: nowrap;
-            }
-
-            #y-max {
-                top: 6px;
-                right: 8px;
-            }
-            #y-min {
-                bottom: 6px;
-                right: 8px;
-            }
-            #x-start {
-                bottom: 6px;
-                left: 8px;
-            }
-            #x-end {
-                bottom: 6px;
-                right: 80px;
             }
 
             #error-msg {
@@ -107,6 +91,7 @@
                 text-align: center;
                 max-width: 400px;
                 line-height: 1.5;
+                z-index: 10;
             }
         </style>
     </head>
@@ -124,10 +109,7 @@
 
         <div id="chart-container">
             <canvas id="canvas"></canvas>
-            <div id="y-max" class="axis-label"></div>
-            <div id="y-min" class="axis-label"></div>
-            <div id="x-start" class="axis-label"></div>
-            <div id="x-end" class="axis-label"></div>
+            <canvas id="axes-canvas"></canvas>
             <div id="error-msg"></div>
         </div>
 
@@ -137,8 +119,11 @@
             // For GCP deployment: set to your bucket's public URL, e.g.:
             const DATA_URL =
                 "https://storage.googleapis.com/realtime-energy-prices/latest.json";
-            // const DATA_URL = '/latest.json';
+            // const DATA_URL = "/latest.json";
             const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+            // Plot margins in CSS pixels (left reserved for Y labels, bottom for X labels)
+            const MARGIN = { left: 68, right: 20, top: 24, bottom: 48 };
 
             // --- WGSL shaders ---
             const SHADER = `
@@ -161,13 +146,11 @@
             let currentData = null;
 
             const canvas = document.getElementById("canvas");
+            const axesCanvas = document.getElementById("axes-canvas");
+            const axesCtx = axesCanvas.getContext("2d");
             const locationSelect = document.getElementById("location-select");
             const statusEl = document.getElementById("status");
             const errorEl = document.getElementById("error-msg");
-            const yMaxEl = document.getElementById("y-max");
-            const yMinEl = document.getElementById("y-min");
-            const xStartEl = document.getElementById("x-start");
-            const xEndEl = document.getElementById("x-end");
 
             function showError(msg) {
                 errorEl.style.display = "block";
@@ -238,8 +221,68 @@
                 return true;
             }
 
-            // --- Rendering ---
-            function renderSeries(seriesPoints) {
+            // --- Scale helpers ---
+            function niceNum(range, round) {
+                if (range === 0) return 1;
+                const exp = Math.floor(Math.log10(range));
+                const f = range / Math.pow(10, exp);
+                let nf;
+                if (round) {
+                    if (f < 1.5) nf = 1;
+                    else if (f < 3) nf = 2;
+                    else if (f < 7) nf = 5;
+                    else nf = 10;
+                } else {
+                    if (f <= 1) nf = 1;
+                    else if (f <= 2) nf = 2;
+                    else if (f <= 5) nf = 5;
+                    else nf = 10;
+                }
+                return nf * Math.pow(10, exp);
+            }
+
+            function niceScale(dataMin, dataMax, maxTicks = 6) {
+                if (dataMin === dataMax) {
+                    dataMin -= 1;
+                    dataMax += 1;
+                }
+                const range = niceNum(dataMax - dataMin, false);
+                const step = niceNum(range / (maxTicks - 1), true);
+                const niceMin = Math.floor(dataMin / step) * step;
+                const niceMax = Math.ceil(dataMax / step) * step;
+                return { min: niceMin, max: niceMax, step };
+            }
+
+            // Pick a round time interval that yields ~5–6 tick marks
+            function niceTimeStep(rangeSeconds) {
+                const steps = [
+                    60, 300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200,
+                    86400,
+                ];
+                const ideal = rangeSeconds / 5;
+                return steps.find((s) => s >= ideal) || steps[steps.length - 1];
+            }
+
+            function formatTimeLabel(unixSeconds, rangeSeconds) {
+                const opts = { hour: "2-digit", minute: "2-digit" };
+                if (rangeSeconds >= 86400) {
+                    opts.month = "short";
+                    opts.day = "numeric";
+                }
+                return new Date(unixSeconds * 1000).toLocaleString(
+                    undefined,
+                    opts,
+                );
+            }
+
+            function formatPrice(v, step) {
+                const decimals = step < 1 ? 2 : step < 10 ? 1 : 0;
+                return v.toFixed(decimals);
+            }
+
+            // --- WebGPU rendering ---
+            // Maps data into clip space respecting MARGIN so the 2D axes overlay aligns.
+            function renderSeries(seriesPoints, tMin, tMax, yMin, yMax) {
                 if (
                     !device ||
                     !pipeline ||
@@ -248,28 +291,29 @@
                 )
                     return;
 
-                // seriesPoints: [[unix_ts, lmp], ...]
-                const times = seriesPoints.map((p) => p[0]);
-                const lmps = seriesPoints.map((p) => p[1]);
-                const tMin = Math.min(...times),
-                    tMax = Math.max(...times);
-                const lmpMin = Math.min(...lmps),
-                    lmpMax = Math.max(...lmps);
-                const lmpRange = lmpMax - lmpMin || 1;
-                const tRange = tMax - tMin || 1;
+                const dpr = window.devicePixelRatio || 1;
+                const W = canvas.width;
+                const H = canvas.height;
 
-                const PAD = 0.08;
+                // Margins converted to physical pixels → clip space offsets
+                const xMinClip = -1 + (2 * MARGIN.left * dpr) / W;
+                const xMaxClip = 1 - (2 * MARGIN.right * dpr) / W;
+                const yMinClip = -1 + (2 * MARGIN.bottom * dpr) / H;
+                const yMaxClip = 1 - (2 * MARGIN.top * dpr) / H;
+
+                const tRange = tMax - tMin || 1;
+                const yRange = yMax - yMin || 1;
+
                 const vertices = new Float32Array(seriesPoints.length * 2);
                 for (let i = 0; i < seriesPoints.length; i++) {
                     vertices[i * 2] =
-                        -1 +
-                        PAD +
-                        ((seriesPoints[i][0] - tMin) / tRange) * (2 - 2 * PAD);
+                        xMinClip +
+                        ((seriesPoints[i][0] - tMin) / tRange) *
+                            (xMaxClip - xMinClip);
                     vertices[i * 2 + 1] =
-                        -1 +
-                        PAD +
-                        ((seriesPoints[i][1] - lmpMin) / lmpRange) *
-                            (2 - 2 * PAD);
+                        yMinClip +
+                        ((seriesPoints[i][1] - yMin) / yRange) *
+                            (yMaxClip - yMinClip);
                 }
 
                 const vBuf = device.createBuffer({
@@ -283,7 +327,12 @@
                     colorAttachments: [
                         {
                             view: context.getCurrentTexture().createView(),
-                            clearValue: { r: 0.051, g: 0.067, b: 0.09, a: 1.0 },
+                            clearValue: {
+                                r: 0.051,
+                                g: 0.067,
+                                b: 0.09,
+                                a: 1.0,
+                            },
                             loadOp: "clear",
                             storeOp: "store",
                         },
@@ -294,12 +343,122 @@
                 pass.draw(seriesPoints.length);
                 pass.end();
                 device.queue.submit([encoder.finish()]);
+            }
 
-                // Update axis labels
-                yMaxEl.textContent = `${lmpMax.toFixed(2)} $/MWh`;
-                yMinEl.textContent = `${lmpMin.toFixed(2)} $/MWh`;
-                xStartEl.textContent = formatTime(tMin);
-                xEndEl.textContent = formatTime(tMax);
+            // --- 2D axes overlay ---
+            function renderAxes(tMin, tMax, yMin, yMax, yStep) {
+                const dpr = window.devicePixelRatio || 1;
+                const W = axesCanvas.width;
+                const H = axesCanvas.height;
+                const cssW = W / dpr;
+                const cssH = H / dpr;
+
+                // Work in CSS pixels
+                axesCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                axesCtx.clearRect(0, 0, cssW, cssH);
+
+                const pL = MARGIN.left;
+                const pR = cssW - MARGIN.right;
+                const pT = MARGIN.top;
+                const pB = cssH - MARGIN.bottom;
+                const pW = pR - pL;
+                const pH = pB - pT;
+
+                const tRange = tMax - tMin || 1;
+                const yRange = yMax - yMin || 1;
+
+                // --- Mask WebGPU canvas in the margin strips ---
+                axesCtx.fillStyle = "#0d1117";
+                axesCtx.fillRect(0, 0, pL, cssH); // left
+                axesCtx.fillRect(0, 0, cssW, pT); // top
+                axesCtx.fillRect(pR, 0, cssW - pR, cssH); // right
+                axesCtx.fillRect(0, pB, cssW, cssH - pB); // bottom
+
+                // --- Y gridlines & labels ---
+                const yTickCount = Math.round((yMax - yMin) / yStep) + 1;
+                for (let i = 0; i < yTickCount; i++) {
+                    const v = yMin + i * yStep;
+                    if (v < yMin - yStep * 0.01 || v > yMax + yStep * 0.01)
+                        continue;
+                    const y = pB - ((v - yMin) / yRange) * pH;
+
+                    // Gridline
+                    axesCtx.strokeStyle = "#21262d";
+                    axesCtx.lineWidth = 1;
+                    axesCtx.beginPath();
+                    axesCtx.moveTo(pL, y);
+                    axesCtx.lineTo(pR, y);
+                    axesCtx.stroke();
+
+                    // Tick mark
+                    axesCtx.strokeStyle = "#30363d";
+                    axesCtx.beginPath();
+                    axesCtx.moveTo(pL - 5, y);
+                    axesCtx.lineTo(pL, y);
+                    axesCtx.stroke();
+
+                    // Label
+                    axesCtx.fillStyle = "#8b949e";
+                    axesCtx.font = "11px Arial";
+                    axesCtx.textAlign = "right";
+                    axesCtx.textBaseline = "middle";
+                    axesCtx.fillText(formatPrice(v, yStep), pL - 8, y);
+                }
+
+                // --- X gridlines & labels ---
+                const timeStep = niceTimeStep(tRange);
+                const firstTick = Math.ceil(tMin / timeStep) * timeStep;
+
+                for (
+                    let t = firstTick;
+                    t <= tMax + timeStep * 0.01;
+                    t += timeStep
+                ) {
+                    if (t > tMax + timeStep * 0.01) break;
+                    const x = pL + ((t - tMin) / tRange) * pW;
+
+                    // Gridline
+                    axesCtx.strokeStyle = "#21262d";
+                    axesCtx.lineWidth = 1;
+                    axesCtx.beginPath();
+                    axesCtx.moveTo(x, pT);
+                    axesCtx.lineTo(x, pB);
+                    axesCtx.stroke();
+
+                    // Tick mark
+                    axesCtx.strokeStyle = "#30363d";
+                    axesCtx.beginPath();
+                    axesCtx.moveTo(x, pB);
+                    axesCtx.lineTo(x, pB + 5);
+                    axesCtx.stroke();
+
+                    // Label
+                    axesCtx.fillStyle = "#8b949e";
+                    axesCtx.font = "11px Arial";
+                    axesCtx.textAlign = "center";
+                    axesCtx.textBaseline = "top";
+                    axesCtx.fillText(formatTimeLabel(t, tRange), x, pB + 8);
+                }
+
+                // --- Axis border (L-shape: left + bottom) ---
+                axesCtx.strokeStyle = "#30363d";
+                axesCtx.lineWidth = 1;
+                axesCtx.beginPath();
+                axesCtx.moveTo(pL, pT);
+                axesCtx.lineTo(pL, pB);
+                axesCtx.lineTo(pR, pB);
+                axesCtx.stroke();
+
+                // --- Y axis title ---
+                axesCtx.save();
+                axesCtx.translate(13, pT + pH / 2);
+                axesCtx.rotate(-Math.PI / 2);
+                axesCtx.fillStyle = "#8b949e";
+                axesCtx.font = "11px Arial";
+                axesCtx.textAlign = "center";
+                axesCtx.textBaseline = "middle";
+                axesCtx.fillText("$/MWh", 0, 0);
+                axesCtx.restore();
             }
 
             function clearCanvas() {
@@ -309,7 +468,12 @@
                     colorAttachments: [
                         {
                             view: context.getCurrentTexture().createView(),
-                            clearValue: { r: 0.051, g: 0.067, b: 0.09, a: 1.0 },
+                            clearValue: {
+                                r: 0.051,
+                                g: 0.067,
+                                b: 0.09,
+                                a: 1.0,
+                            },
                             loadOp: "clear",
                             storeOp: "store",
                         },
@@ -317,20 +481,15 @@
                 });
                 pass.end();
                 device.queue.submit([encoder.finish()]);
-                yMaxEl.textContent =
-                    yMinEl.textContent =
-                    xStartEl.textContent =
-                    xEndEl.textContent =
-                        "";
-            }
 
-            function formatTime(unixSeconds) {
-                return new Date(unixSeconds * 1000).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                });
+                const dpr = window.devicePixelRatio || 1;
+                axesCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                axesCtx.clearRect(
+                    0,
+                    0,
+                    axesCanvas.width / dpr,
+                    axesCanvas.height / dpr,
+                );
             }
 
             // --- Data loading ---
@@ -365,7 +524,15 @@
                 const loc = locationSelect.value;
                 const pts = currentData.series[loc];
                 if (pts && pts.length > 0) {
-                    renderSeries(pts);
+                    const times = pts.map((p) => p[0]);
+                    const lmps = pts.map((p) => p[1]);
+                    const tMin = Math.min(...times),
+                        tMax = Math.max(...times);
+                    const lmpMin = Math.min(...lmps),
+                        lmpMax = Math.max(...lmps);
+                    const yScale = niceScale(lmpMin, lmpMax, 6);
+                    renderSeries(pts, tMin, tMax, yScale.min, yScale.max);
+                    renderAxes(tMin, tMax, yScale.min, yScale.max, yScale.step);
                 } else {
                     clearCanvas();
                 }
@@ -374,8 +541,12 @@
             // --- Canvas resize ---
             function onResize() {
                 const dpr = window.devicePixelRatio || 1;
-                canvas.width = Math.floor(canvas.clientWidth * dpr);
-                canvas.height = Math.floor(canvas.clientHeight * dpr);
+                const w = Math.floor(canvas.clientWidth * dpr);
+                const h = Math.floor(canvas.clientHeight * dpr);
+                canvas.width = w;
+                canvas.height = h;
+                axesCanvas.width = w;
+                axesCanvas.height = h;
                 renderSelected();
             }
 
