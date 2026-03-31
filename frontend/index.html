@@ -183,6 +183,13 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
             let fillPipeline = null;
             let canvasFormat = null;
             let currentData = null;
+            let animId = null;
+            let animStartTime = null;
+            const ANIM_DURATION = 1000; // ms
+
+            function easeOutQuart(t) {
+                return 1 - Math.pow(1 - t, 5);
+            }
 
             const canvas = document.getElementById("canvas");
             const axesCanvas = document.getElementById("axes-canvas");
@@ -352,7 +359,14 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
 
             // --- WebGPU rendering ---
             // Maps data into clip space respecting MARGIN so the 2D axes overlay aligns.
-            function renderSeries(seriesPoints, tMin, tMax, yMin, yMax) {
+            function renderSeries(
+                seriesPoints,
+                tMin,
+                tMax,
+                yMin,
+                yMax,
+                clipFraction = 1.0,
+            ) {
                 if (
                     !device ||
                     !linePipeline ||
@@ -361,6 +375,17 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                     seriesPoints.length < 2
                 )
                     return;
+
+                // Clip to animation progress (axes scale stays fixed; only points change)
+                if (clipFraction < 1.0) {
+                    seriesPoints = seriesPoints.slice(
+                        0,
+                        Math.max(
+                            2,
+                            Math.round(clipFraction * seriesPoints.length),
+                        ),
+                    );
+                }
 
                 const dpr = window.devicePixelRatio || 1;
                 const W = canvas.width;
@@ -488,10 +513,21 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
             // --- Annotation bubble helper ---
             // Draws a two-line bubble (label + value) with a dashed stem and dot
             // pointing at (dataX, dataY) in CSS-pixel plot coordinates.
-            function drawBubble(ctx, dataX, dataY, label, valueStr, color, pL, pR, pT, pB) {
+            function drawBubble(
+                ctx,
+                dataX,
+                dataY,
+                label,
+                valueStr,
+                color,
+                pL,
+                pR,
+                pT,
+                pB,
+            ) {
                 const ARROW_GAP = 11;
-                const PAD_X    = 9;
-                const PAD_Y    = 5;
+                const PAD_X = 9;
+                const PAD_Y = 5;
                 const SZ_LABEL = 10;
                 const SZ_VALUE = 13;
 
@@ -504,9 +540,11 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 const bh = SZ_LABEL + SZ_VALUE + PAD_Y * 2 + 4;
 
                 // Place above if there is more vertical room there
-                const placeAbove = (dataY - pT) > (pB - dataY);
+                const placeAbove = dataY - pT > pB - dataY;
                 let bx = dataX - bw / 2;
-                let by = placeAbove ? dataY - ARROW_GAP - bh : dataY + ARROW_GAP;
+                let by = placeAbove
+                    ? dataY - ARROW_GAP - bh
+                    : dataY + ARROW_GAP;
 
                 // Clamp inside the plot area
                 bx = Math.max(pL + 2, Math.min(pR - bw - 2, bx));
@@ -554,7 +592,15 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
             }
 
             // --- 2D axes overlay ---
-            function renderAxes(tMin, tMax, yMin, yMax, yStep, seriesPoints) {
+            function renderAxes(
+                tMin,
+                tMax,
+                yMin,
+                yMax,
+                yStep,
+                seriesPoints,
+                clipFraction = 1.0,
+            ) {
                 const dpr = window.devicePixelRatio || 1;
                 const W = axesCanvas.width;
                 const H = axesCanvas.height;
@@ -574,6 +620,13 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
 
                 const tRange = tMax - tMin || 1;
                 const yRange = yMax - yMin || 1;
+
+                function plotX(t) {
+                    return pL + ((t - tMin) / tRange) * pW;
+                }
+                function plotY(v) {
+                    return pB - ((v - yMin) / yRange) * pH;
+                }
 
                 // --- Mask WebGPU canvas in the margin strips ---
                 axesCtx.fillStyle = "#0d1117";
@@ -677,44 +730,117 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 axesCtx.fillText("$/MWh", 0, 0);
                 axesCtx.restore();
 
-                // --- Price annotation bubbles ---
-                if (seriesPoints && seriesPoints.length > 0) {
-                    // Find indices for highest, lowest, and current (last) point
-                    let hiIdx = 0, loIdx = 0;
+                // --- Leading-edge glow (only while animating) ---
+                if (
+                    clipFraction < 1.0 &&
+                    seriesPoints &&
+                    seriesPoints.length > 1
+                ) {
+                    const clipN = Math.max(
+                        2,
+                        Math.round(clipFraction * seriesPoints.length),
+                    );
+                    const tipPt =
+                        seriesPoints[
+                            Math.min(clipN - 1, seriesPoints.length - 1)
+                        ];
+                    const tipX = plotX(tipPt[0]);
+                    const tipY = plotY(tipPt[1]);
+
+                    axesCtx.save();
+                    axesCtx.beginPath();
+                    axesCtx.rect(pL, pT, pW, pH);
+                    axesCtx.clip();
+
+                    const grd = axesCtx.createRadialGradient(
+                        tipX,
+                        tipY,
+                        0,
+                        tipX,
+                        tipY,
+                        16,
+                    );
+                    grd.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+                    grd.addColorStop(0.25, "rgba(180, 255, 210, 0.6)");
+                    grd.addColorStop(1, "rgba(0, 0, 0, 0)");
+                    axesCtx.fillStyle = grd;
+                    axesCtx.beginPath();
+                    axesCtx.arc(tipX, tipY, 16, 0, Math.PI * 2);
+                    axesCtx.fill();
+                    axesCtx.restore();
+                }
+
+                // --- Price annotation bubbles (fade in as animation finishes) ---
+                if (
+                    seriesPoints &&
+                    seriesPoints.length > 0 &&
+                    clipFraction > 0.85
+                ) {
+                    axesCtx.globalAlpha = Math.min(
+                        1,
+                        (clipFraction - 0.85) / 0.15,
+                    );
+
+                    let hiIdx = 0,
+                        loIdx = 0;
                     for (let i = 1; i < seriesPoints.length; i++) {
-                        if (seriesPoints[i][1] > seriesPoints[hiIdx][1]) hiIdx = i;
-                        if (seriesPoints[i][1] < seriesPoints[loIdx][1]) loIdx = i;
+                        if (seriesPoints[i][1] > seriesPoints[hiIdx][1])
+                            hiIdx = i;
+                        if (seriesPoints[i][1] < seriesPoints[loIdx][1])
+                            loIdx = i;
                     }
                     const nowIdx = seriesPoints.length - 1;
 
-                    function plotX(t) { return pL + ((t - tMin) / tRange) * pW; }
-                    function plotY(v) { return pB - ((v - yMin) / yRange) * pH; }
-
                     function bubbleFmt(v) {
                         const abs = Math.abs(v);
-                        const d   = abs >= 100 ? 1 : 2;
+                        const d = abs >= 100 ? 1 : 2;
                         return (v < 0 ? "\u2212" : "") + "$" + abs.toFixed(d);
                     }
 
-                    const hiPt  = seriesPoints[hiIdx];
-                    const loPt  = seriesPoints[loIdx];
+                    const hiPt = seriesPoints[hiIdx];
+                    const loPt = seriesPoints[loIdx];
                     const nowPt = seriesPoints[nowIdx];
 
-                    // Draw HIGH and LOW first, then NOW on top
-                    drawBubble(axesCtx,
-                        plotX(hiPt[0]), plotY(hiPt[1]),
-                        "HIGH", bubbleFmt(hiPt[1]),
-                        "#ff9944", pL, pR, pT, pB);
+                    drawBubble(
+                        axesCtx,
+                        plotX(hiPt[0]),
+                        plotY(hiPt[1]),
+                        "HIGH",
+                        bubbleFmt(hiPt[1]),
+                        "#ff9944",
+                        pL,
+                        pR,
+                        pT,
+                        pB,
+                    );
 
-                    drawBubble(axesCtx,
-                        plotX(loPt[0]), plotY(loPt[1]),
-                        "LOW", bubbleFmt(loPt[1]),
-                        "#44ccff", pL, pR, pT, pB);
+                    drawBubble(
+                        axesCtx,
+                        plotX(loPt[0]),
+                        plotY(loPt[1]),
+                        "LOW",
+                        bubbleFmt(loPt[1]),
+                        "#44ccff",
+                        pL,
+                        pR,
+                        pT,
+                        pB,
+                    );
 
-                    drawBubble(axesCtx,
-                        plotX(nowPt[0]), plotY(nowPt[1]),
-                        "NOW", bubbleFmt(nowPt[1]),
-                        "#aaf0c1", pL, pR, pT, pB);
+                    drawBubble(
+                        axesCtx,
+                        plotX(nowPt[0]),
+                        plotY(nowPt[1]),
+                        "NOW",
+                        bubbleFmt(nowPt[1]),
+                        "#aaf0c1",
+                        pL,
+                        pR,
+                        pT,
+                        pB,
+                    );
+
+                    axesCtx.globalAlpha = 1.0;
                 }
             }
 
@@ -770,13 +896,13 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
 
                     const updated = new Date(currentData.updated);
                     setStatus(`Updated: ${updated.toLocaleString()}`);
-                    renderSelected();
+                    startAnimation();
                 } catch (e) {
                     setStatus(`Fetch error: ${e.message}`);
                 }
             }
 
-            function renderSelected() {
+            function renderSelected(clipFraction = 1.0) {
                 if (!currentData) return;
                 const loc = locationSelect.value;
                 const pts = currentData.series[loc];
@@ -788,11 +914,45 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                     const lmpMin = Math.min(...lmps),
                         lmpMax = Math.max(...lmps);
                     const yScale = niceScale(lmpMin, lmpMax, 6);
-                    renderSeries(pts, tMin, tMax, yScale.min, yScale.max);
-                    renderAxes(tMin, tMax, yScale.min, yScale.max, yScale.step, pts);
+                    renderSeries(
+                        pts,
+                        tMin,
+                        tMax,
+                        yScale.min,
+                        yScale.max,
+                        clipFraction,
+                    );
+                    renderAxes(
+                        tMin,
+                        tMax,
+                        yScale.min,
+                        yScale.max,
+                        yScale.step,
+                        pts,
+                        clipFraction,
+                    );
                 } else {
                     clearCanvas();
                 }
+            }
+
+            function startAnimation() {
+                if (animId !== null) {
+                    cancelAnimationFrame(animId);
+                    animId = null;
+                }
+                animStartTime = null;
+                function frame(ts) {
+                    if (!animStartTime) animStartTime = ts;
+                    const raw = Math.min(
+                        (ts - animStartTime) / ANIM_DURATION,
+                        1.0,
+                    );
+                    renderSelected(easeOutQuart(raw));
+                    if (raw < 1.0) animId = requestAnimationFrame(frame);
+                    else animId = null;
+                }
+                animId = requestAnimationFrame(frame);
             }
 
             // --- Canvas resize ---
@@ -804,7 +964,7 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 canvas.height = h;
                 axesCanvas.width = w;
                 axesCanvas.height = h;
-                renderSelected();
+                startAnimation();
             }
 
             // --- Entry point ---
@@ -815,7 +975,7 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 new ResizeObserver(onResize).observe(canvas);
                 onResize();
 
-                locationSelect.addEventListener("change", renderSelected);
+                locationSelect.addEventListener("change", startAnimation);
 
                 await fetchData();
                 setInterval(fetchData, REFRESH_INTERVAL_MS);
