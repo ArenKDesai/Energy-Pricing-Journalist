@@ -485,8 +485,76 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 device.queue.submit([encoder.finish()]);
             }
 
+            // --- Annotation bubble helper ---
+            // Draws a two-line bubble (label + value) with a dashed stem and dot
+            // pointing at (dataX, dataY) in CSS-pixel plot coordinates.
+            function drawBubble(ctx, dataX, dataY, label, valueStr, color, pL, pR, pT, pB) {
+                const ARROW_GAP = 11;
+                const PAD_X    = 9;
+                const PAD_Y    = 5;
+                const SZ_LABEL = 10;
+                const SZ_VALUE = 13;
+
+                ctx.font = `bold ${SZ_LABEL}px Arial`;
+                const labelW = ctx.measureText(label).width;
+                ctx.font = `bold ${SZ_VALUE}px Arial`;
+                const valueW = ctx.measureText(valueStr).width;
+
+                const bw = Math.max(labelW, valueW) + PAD_X * 2;
+                const bh = SZ_LABEL + SZ_VALUE + PAD_Y * 2 + 4;
+
+                // Place above if there is more vertical room there
+                const placeAbove = (dataY - pT) > (pB - dataY);
+                let bx = dataX - bw / 2;
+                let by = placeAbove ? dataY - ARROW_GAP - bh : dataY + ARROW_GAP;
+
+                // Clamp inside the plot area
+                bx = Math.max(pL + 2, Math.min(pR - bw - 2, bx));
+                by = Math.max(pT + 2, Math.min(pB - bh - 2, by));
+
+                const stemX = bx + bw / 2;
+                const stemY = placeAbove ? by + bh : by;
+
+                // Dashed stem from bubble edge to data point
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(stemX, stemY);
+                ctx.lineTo(dataX, dataY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Dot at the data point
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(dataX, dataY, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bubble background + border
+                ctx.fillStyle = "rgba(13, 17, 23, 0.92)";
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(bx, by, bw, bh, 5);
+                ctx.fill();
+                ctx.stroke();
+
+                // Label line  (e.g. "HIGH")
+                ctx.fillStyle = color;
+                ctx.font = `bold ${SZ_LABEL}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "top";
+                ctx.fillText(label, bx + bw / 2, by + PAD_Y);
+
+                // Value line  (e.g. "$45.20")
+                ctx.fillStyle = "#e6edf3";
+                ctx.font = `bold ${SZ_VALUE}px Arial`;
+                ctx.fillText(valueStr, bx + bw / 2, by + PAD_Y + SZ_LABEL + 4);
+            }
+
             // --- 2D axes overlay ---
-            function renderAxes(tMin, tMax, yMin, yMax, yStep) {
+            function renderAxes(tMin, tMax, yMin, yMax, yStep, seriesPoints) {
                 const dpr = window.devicePixelRatio || 1;
                 const W = axesCanvas.width;
                 const H = axesCanvas.height;
@@ -608,6 +676,46 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                 axesCtx.textBaseline = "middle";
                 axesCtx.fillText("$/MWh", 0, 0);
                 axesCtx.restore();
+
+                // --- Price annotation bubbles ---
+                if (seriesPoints && seriesPoints.length > 0) {
+                    // Find indices for highest, lowest, and current (last) point
+                    let hiIdx = 0, loIdx = 0;
+                    for (let i = 1; i < seriesPoints.length; i++) {
+                        if (seriesPoints[i][1] > seriesPoints[hiIdx][1]) hiIdx = i;
+                        if (seriesPoints[i][1] < seriesPoints[loIdx][1]) loIdx = i;
+                    }
+                    const nowIdx = seriesPoints.length - 1;
+
+                    function plotX(t) { return pL + ((t - tMin) / tRange) * pW; }
+                    function plotY(v) { return pB - ((v - yMin) / yRange) * pH; }
+
+                    function bubbleFmt(v) {
+                        const abs = Math.abs(v);
+                        const d   = abs >= 100 ? 1 : 2;
+                        return (v < 0 ? "\u2212" : "") + "$" + abs.toFixed(d);
+                    }
+
+                    const hiPt  = seriesPoints[hiIdx];
+                    const loPt  = seriesPoints[loIdx];
+                    const nowPt = seriesPoints[nowIdx];
+
+                    // Draw HIGH and LOW first, then NOW on top
+                    drawBubble(axesCtx,
+                        plotX(hiPt[0]), plotY(hiPt[1]),
+                        "HIGH", bubbleFmt(hiPt[1]),
+                        "#ff9944", pL, pR, pT, pB);
+
+                    drawBubble(axesCtx,
+                        plotX(loPt[0]), plotY(loPt[1]),
+                        "LOW", bubbleFmt(loPt[1]),
+                        "#44ccff", pL, pR, pT, pB);
+
+                    drawBubble(axesCtx,
+                        plotX(nowPt[0]), plotY(nowPt[1]),
+                        "NOW", bubbleFmt(nowPt[1]),
+                        "#aaf0c1", pL, pR, pT, pB);
+                }
             }
 
             function clearCanvas() {
@@ -681,7 +789,7 @@ fn fs_fill(in: VOut) -> @location(0) vec4f {
                         lmpMax = Math.max(...lmps);
                     const yScale = niceScale(lmpMin, lmpMax, 6);
                     renderSeries(pts, tMin, tMax, yScale.min, yScale.max);
-                    renderAxes(tMin, tMax, yScale.min, yScale.max, yScale.step);
+                    renderAxes(tMin, tMax, yScale.min, yScale.max, yScale.step, pts);
                 } else {
                     clearCanvas();
                 }
