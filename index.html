@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>MISO RT LMP</title>
+        <link data-trunk rel="rust" data-wasm-opt="z" />
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: Arial, sans-serif;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            #header {
+                flex: 0 0 auto;
+                padding: 14px 20px 10px;
+                border-bottom: 1px solid #21262d;
+            }
+
+            h1 {
+                color: #aaf0c1;
+                font-size: 20px;
+                margin-bottom: 8px;
+            }
+
+            #controls {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+
+            label {
+                font-size: 14px;
+            }
+
+            select {
+                background: #161b22;
+                color: #c9d1d9;
+                border: 1px solid #30363d;
+                padding: 4px 8px;
+                font-size: 14px;
+                margin-left: 6px;
+                border-radius: 4px;
+            }
+
+            .status {
+                font-size: 13px;
+                color: #8b949e;
+            }
+
+            .forecast-tag {
+                font-size: 13px;
+                color: #ffaa00;
+            }
+
+            #chart-container {
+                flex: 1;
+                position: relative;
+                min-height: 0;
+            }
+
+            canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+
+            /* Loading overlay shown while the first snapshot is in flight */
+            #loading {
+                position: absolute;
+                inset: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 18px;
+                background: #0d1117;
+                z-index: 20;
+            }
+
+            .spinner {
+                width: 46px;
+                height: 46px;
+                border: 4px solid #21262d;
+                border-top-color: #aaf0c1;
+                border-radius: 50%;
+                animation: spin 0.9s linear infinite;
+            }
+
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .loading-text {
+                font-size: 14px;
+                color: #8b949e;
+                text-align: center;
+                line-height: 1.6;
+            }
+
+            .error {
+                color: #f85149;
+            }
+        </style>
+    </head>
+    <body></body>
+</html>

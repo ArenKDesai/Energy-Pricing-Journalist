@@ -1,0 +1,52 @@
+[package]
+name = "energy-pricing-journalist"
+version = "0.1.0"
+edition = "2021"
+description = "Browser-only Rust/WASM app that streams MISO real-time HUB LMPs"
+
+[dependencies]
+leptos = { version = "0.6", features = ["csr"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+gloo-timers = { version = "0.3", features = ["futures"] }
+gloo-net = { version = "0.6", features = ["http"] }
+console_error_panic_hook = "0.1"
+futures = "0.3"
+serde_json = "1"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "TextMetrics",
+    "DomRect",
+    "MouseEvent",
+    "Performance",
+    # IndexedDB
+    "IdbFactory",
+    "IdbOpenDbRequest",
+    "IdbRequest",
+    "IdbDatabase",
+    "IdbTransaction",
+    "IdbTransactionMode",
+    "IdbObjectStore",
+    "IdbKeyRange",
+    "IdbCursorWithValue",
+    "IdbCursor",
+    "DomStringList",
+    "Event",
+    "EventTarget",
+]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
