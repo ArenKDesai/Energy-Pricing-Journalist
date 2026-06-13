@@ -1,4 +1,0 @@
-polars
-pyarrow
-requests
-google-cloud-storage

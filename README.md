@@ -1,111 +1,81 @@
 # Energy Pricing Journalist
 
-Two-part system for collecting and visualizing MISO real-time energy prices.
+A **Rust + WebAssembly** single-page app that streams MISO real-time HUB LMPs
+**entirely in the browser** — no backend, no server-side collector.
 
-View the streamed data [here](https://storage.googleapis.com/realtime-energy-prices/index.html)
+On load it connects to MISO's DataBroker, draws a live line chart of the
+real-time LMP for each HUB, and keeps fetching every new 5-minute interval.
+History is persisted locally (IndexedDB) and accumulates toward a rolling
+3-day window across reloads.
 
-## Architecture
+## How it works
 
-### collector/
-Python service that fetches MISO RT LMP data and stores it. On GCP it runs as a
-**Cloud Run Job** triggered by Cloud Scheduler every 5 minutes. Locally it loops.
+- **Data source.** MISO's `MISORTWDDataBroker` `GetDataByNodeTypes` endpoint is
+  the only MISO feed that sends `Access-Control-Allow-Origin: *`, so the browser
+  can call it directly with no proxy. It returns the *current* 5-minute snapshot
+  for all nodes; we keep the 8 `*.HUB` locations (ARKANSAS, ILLINOIS, INDIANA,
+  LOUISIANA, MICHIGAN, MINN, MS, TEXAS).
+- **History.** The market-report files that contain true history live on a
+  host with **no CORS**, and are only hourly — unreachable from a browser-only
+  app. So instead of backfilling, the app accumulates 5-minute snapshots
+  forward and stores them in **IndexedDB**, pruned to the last 3 days. A fresh
+  browser profile therefore starts with one point and fills in over time; a
+  returning visitor sees the history it has already collected.
+- **Polling.** Polls once a minute and de-duplicates by interval timestamp, so a
+  new 5-minute value appears promptly and late-settling values overwrite in
+  place.
+- **Chart.** Canvas2D line chart with axes, high/low markers, the latest value,
+  and the forecast overlay (dashed mean path + translucent 95% band).
+- **Forecast.** [`src/model.rs`](src/model.rs) fits an **ARIMA(p,1,q) + GARCH(1,1)**
+  model entirely client-side and predicts the next 2 hours (24 × 5-minute steps):
+  - *Mean.* First-difference the price series (d = 1), then ARMA(p, q) on the
+    differences with orders chosen by AIC and parameters fit by conditional least
+    squares. The forecast is rolled forward and re-integrated to price levels.
+  - *Variance.* GARCH(1,1) on the ARMA residuals (Gaussian MLE), propagated
+    through the ARIMA MA(∞) weights so the 95% band widens with horizon and with
+    recent volatility.
+  - *Fitting* uses a small Nelder–Mead optimiser; both fits are plain `f64` and
+    run in WASM. Until ~48 samples have accumulated it falls back to a random
+    walk with drift so the overlay still appears while history builds.
 
-Outputs written to a GCS bucket (GCP) or `./data/` (local):
-- `prices.parquet` — rolling 2-week history of all node prices
-- `latest.json` — last 24h of HUB prices for the frontend
+## Project layout
 
-### frontend/
-Single `index.html` with a **WebGPU** line chart. Deployed as a static page in GCS.
-Fetches `latest.json` and re-fetches every 5 minutes automatically.
-
-## Local Development
-
-**Prerequisites:** Docker, Docker Compose
-
-```bash
-docker compose up
-```
-
-- Frontend: http://localhost:8080
-- Raw data files: `./data/`
-
-The collector runs immediately and then every 5 minutes. The web server starts
-serving right away; the chart will appear once the first fetch completes (~10s).
-
-## GCP Deployment
-
-### Environment variables (collector)
-| Variable | Description |
+| File | Responsibility |
 |---|---|
-| `GCS_BUCKET` | GCS bucket name (enables GCS mode) |
-| `LOCAL_DEV` | `true` to loop instead of run-once |
-| `DATA_DIR` | Local output dir (default `/data`) |
+| [src/main.rs](src/main.rs) | Entry point; mounts the Leptos app |
+| [src/app.rs](src/app.rs) | Root component, loading state, polling loop, wiring |
+| [src/miso.rs](src/miso.rs) | Fetch + parse the DataBroker snapshot |
+| [src/storage.rs](src/storage.rs) | IndexedDB persistence + 3-day pruning |
+| [src/chart.rs](src/chart.rs) | Canvas2D rendering |
+| [src/model.rs](src/model.rs) | ARIMA-GARCH forecast (fit + predict) |
+| [src/types.rs](src/types.rs) | Shared types and time helpers |
 
-### Build and push the collector
+## Development
+
+**Prerequisites**
+
 ```bash
-docker build -t gcr.io/PROJECT/miso-collector ./collector
-docker push gcr.io/PROJECT/miso-collector
+rustup target add wasm32-unknown-unknown
+# Arch: a prebuilt binary avoids a known libdeflate/gcc-16 build failure
+sudo pacman -S trunk
+# elsewhere:
+cargo install trunk
 ```
 
-### Create the Cloud Run Job
+**Run**
+
 ```bash
-gcloud run jobs create miso-collector \
-  --image gcr.io/PROJECT/miso-collector \
-  --set-env-vars GCS_BUCKET=YOUR_BUCKET \
-  --region us-central1
+trunk serve   # http://127.0.0.1:8080
 ```
 
-### Schedule via Cloud Scheduler (every 5 minutes)
+A spinner ("Downloading real-time HUB prices from MISO…") shows until the first
+snapshot lands, so it's always clear the page has loaded and is fetching.
+
+**Build for deployment** (static files into `dist/`)
+
 ```bash
-gcloud scheduler jobs create http miso-collector-trigger \
-  --schedule "*/5 * * * *" \
-  --uri "https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT/jobs/miso-collector:run" \
-  --http-method POST \
-  --oauth-service-account-email YOUR_SA@PROJECT.iam.gserviceaccount.com
+trunk build --release
 ```
 
-### Deploy the frontend to GCS
-```bash
-# Upload
-gsutil cp frontend/index.html gs://YOUR_BUCKET/index.html
-
-# Enable static website hosting
-gsutil web set -m index.html gs://YOUR_BUCKET
-
-# Make bucket public
-gsutil iam ch allUsers:objectViewer gs://YOUR_BUCKET
-
-# Set CORS on the bucket so the frontend can fetch latest.json
-gsutil cors set - gs://YOUR_BUCKET <<'EOF'
-[{"origin": ["*"], "method": ["GET"], "maxAgeSeconds": 60}]
-EOF
-```
-
-> **Update `DATA_URL` in `frontend/index.html`** before uploading:
-> ```js
-> const DATA_URL = 'https://storage.googleapis.com/YOUR_BUCKET/latest.json';
-> ```
-
-## Data format
-
-### prices.parquet columns
-| Column | Type | Description |
-|---|---|---|
-| `location` | String | MISO node name |
-| `lmp` | Float32 | Locational Marginal Price ($/MWh) |
-| `mcc` | Float32 | Congestion component |
-| `mlc` | Float32 | Loss component |
-| `datetime` | Datetime (America/Chicago) | Snapshot time |
-
-### latest.json schema
-```json
-{
-  "updated": "<ISO 8601 timestamp>",
-  "locations": ["LOC1", "LOC2"],
-  "series": {
-    "LOC1": [[unix_seconds, lmp], ...],
-    "LOC2": [[unix_seconds, lmp], ...]
-  }
-}
-```
-Up to 20 HUB locations, up to 24 hours of data per location.
+The contents of `dist/` are a fully static site — host them anywhere (GCS,
+Netlify, GitHub Pages, etc.). There is nothing to run server-side.

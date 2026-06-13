@@ -1,12 +1,8 @@
-.venv/
-.ruff_cache/
-__pycache__/
-*.pyc
-*.KEY
-.env
+# Rust / Trunk build output
+/target
+/dist
+
 .claude
 .claude/*
-
-# Local data output (tracked via data/.gitkeep)
-data/*.parquet
-data/*.json
+.env
+*.KEY
