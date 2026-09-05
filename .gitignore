@@ -1,6 +1,14 @@
 # Rust / Trunk build output
-/target
-/dist
+/web/target
+/web/dist
+
+# Local MISO archive: ~600 MB of raw reports and a ~2.3 GB DuckDB. Both are
+# rebuildable with db/src/fetch.py + db/src/load.py, so neither is committed.
+# The small exported slice the site actually ships (web/assets/hub_history.json)
+# IS committed.
+/db/data/
+/db/.venv/
+__pycache__/
 
 .claude
 .claude/*

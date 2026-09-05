@@ -5,6 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>MISO RT LMP</title>
         <link data-trunk rel="rust" data-wasm-opt="z" />
+        <!-- Settled hourly archive written by db/src/export_history.py. -->
+        <link data-trunk rel="copy-dir" href="assets" />
         <style>
             * {
                 box-sizing: border-box;
@@ -58,6 +60,25 @@
             .status {
                 font-size: 13px;
                 color: #8b949e;
+            }
+
+            .archive {
+                font-size: 13px;
+                color: #6e86c9;
+            }
+
+            .da-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                color: #6e86c9;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .da-toggle input {
+                accent-color: #6e86c9;
+                cursor: pointer;
             }
 
             .forecast-tag {

@@ -24,6 +24,7 @@ features = [
     "Document",
     "Element",
     "HtmlCanvasElement",
+    "HtmlInputElement",
     "CanvasRenderingContext2d",
     "TextMetrics",
     "DomRect",

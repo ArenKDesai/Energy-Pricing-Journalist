@@ -1,5 +1,6 @@
 mod app;
 mod chart;
+mod history;
 mod miso;
 mod model;
 mod storage;

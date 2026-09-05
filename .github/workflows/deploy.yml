@@ -1,0 +1,103 @@
+# Build the Rust/WASM site and publish it to GitHub Pages.
+#
+# The site is fully static: `trunk build --release` produces `web/dist/`, which
+# includes the settled-history asset (`web/assets/hub_history.json`, copied by
+# Trunk). There is nothing to run server-side, so the artifact is uploaded to
+# Pages as-is.
+#
+# `db/` is deliberately not run here. Rebuilding the archive means downloading
+# ~600 MB of MISO market reports into a ~2.3 GB DuckDB, neither of which is
+# committed. Refreshing the history is a local step:
+#
+#     db/.venv/Scripts/python.exe db/src/fetch.py
+#     db/.venv/Scripts/python.exe db/src/load.py
+#     db/.venv/Scripts/python.exe db/src/export_history.py --days 30
+#
+# then commit the regenerated web/assets/hub_history.json and push — that is
+# what redeploys the site with newer settled data.
+
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; a superseded build is not worth finishing.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  TRUNK_VERSION: "0.21.14"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust with the wasm target
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo registry and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            web/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('web/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install Trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xzf - -C /usr/local/bin
+          trunk --version
+
+      # Pages serves a project site under /<repo>/, so the .js and .wasm URLs
+      # Trunk writes into index.html must point there rather than at the domain
+      # root. --public-url makes them absolute /<repo>/… paths. The archive
+      # asset needs no equivalent: history.rs requests it relatively, so the
+      # browser resolves it against the page URL at whatever depth it is served.
+      - name: Build
+        working-directory: web
+        run: trunk build --release --public-url "/${GITHUB_REPOSITORY#*/}/"
+
+      # Pages' artifact path does not run Jekyll, but .nojekyll costs nothing
+      # and makes that explicit for any other static host.
+      - name: Mark as non-Jekyll
+        run: touch web/dist/.nojekyll
+
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  # Pull requests build (so a broken build is caught) but do not deploy.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

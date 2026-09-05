@@ -12,10 +12,21 @@
 //!
 //! Everything here is plain `f64` arithmetic and runs in the browser via WASM —
 //! both fits use the small Nelder–Mead simplex optimiser below.
+//!
+//! ## Two sampling grids, one model
+//!
+//! Two series are available: the live DataBroker feed at 5 minutes, and the
+//! settled archive exported from DuckDB at 1 hour. They are never concatenated
+//! or interpolated onto a common grid, because that would break both halves of
+//! the model: the ARMA recursion indexes by position and so assumes even
+//! spacing, and GARCH would be estimating 5-minute conditional volatility from
+//! hourly moves — understating it badly, since intra-hour LMP variance is the
+//! part hourly settlement averages away. Instead `forecast_hub` fits whichever
+//! series is adequate on its own grid and labels which one it used.
 
 use std::cmp::Ordering;
 
-use crate::types::{Snapshot, INTERVAL_SECONDS};
+use crate::types::{Point, HISTORY_INTERVAL_SECONDS, INTERVAL_SECONDS};
 
 /// 95% two-sided normal quantile, for the confidence band.
 const Z95: f64 = 1.959_964;
@@ -23,6 +34,11 @@ const Z95: f64 = 1.959_964;
 const MIN_SAMPLES: usize = 48;
 /// Largest AR / MA order considered during selection.
 const MAX_ORDER: usize = 2;
+/// Live-feed horizon: 24 × 5 min = 2 hours.
+const LIVE_HORIZON: usize = 24;
+/// Archive horizon: 6 × 1 h = 6 hours. Hourly data is smoother and supports a
+/// longer useful horizon than the 5-minute feed.
+const ARCHIVE_HORIZON: usize = 6;
 
 /// A forecast: aligned mean path and 95% band, plus a human-readable model tag.
 #[derive(Clone, Default, PartialEq)]
@@ -33,14 +49,42 @@ pub struct Forecast {
     pub label: String,
 }
 
-/// Forecast the next `horizon` 5-minute LMPs for `hub`.
-pub fn forecast(snaps: &[Snapshot], hub: &str, horizon: usize) -> Forecast {
-    let series: Vec<(i64, f64)> = snaps
-        .iter()
-        .filter_map(|s| s.lmp(hub).map(|v| (s.ts, v)))
-        .collect();
+/// Forecast one hub, preferring the live 5-minute feed once it has enough
+/// samples to fit and falling back to the settled hourly archive before then.
+///
+/// Before the archive existed this fell back to a random walk for the first
+/// four hours of every fresh browser profile. With history shipped as a static
+/// asset the ARIMA-GARCH fit is available from the first frame.
+pub fn forecast_hub(live: &[Point], archive: &[Point]) -> Forecast {
+    if live.len() >= MIN_SAMPLES || archive.len() < MIN_SAMPLES {
+        forecast_series(live, INTERVAL_SECONDS, LIVE_HORIZON, "5-min live")
+    } else {
+        forecast_series(archive, HISTORY_INTERVAL_SECONDS, ARCHIVE_HORIZON, "hourly archive")
+    }
+}
 
-    if series.len() < 2 || horizon == 0 {
+/// Describe a horizon in whole hours or minutes, for the chart tag.
+fn horizon_label(interval: i64, horizon: usize) -> String {
+    let secs = interval * horizon as i64;
+    if secs % 3600 == 0 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}m", secs / 60)
+    }
+}
+
+/// Forecast `horizon` steps ahead from a uniformly-sampled price series.
+///
+/// `interval` is the spacing of `series` in seconds; it stamps the forecast
+/// timestamps and sets the horizon's real duration. `basis` names the series in
+/// the chart tag so it is always visible which grid the fit came from.
+pub fn forecast_series(
+    series: &[Point],
+    interval: i64,
+    horizon: usize,
+    basis: &str,
+) -> Forecast {
+    if series.len() < 2 || horizon == 0 || interval <= 0 {
         return Forecast::default();
     }
 
@@ -49,7 +93,7 @@ pub fn forecast(snaps: &[Snapshot], hub: &str, horizon: usize) -> Forecast {
     let n = y.len();
 
     if n < MIN_SAMPLES {
-        return random_walk(&y, last_ts, horizon);
+        return random_walk(&y, last_ts, interval, horizon, basis);
     }
 
     // --- ARIMA mean: difference, center, select ARMA order by AIC ---
@@ -75,7 +119,7 @@ pub fn forecast(snaps: &[Snapshot], hub: &str, horizon: usize) -> Forecast {
 
     let (p, q, phi, theta, _) = match best {
         Some(b) => b,
-        None => return random_walk(&y, last_ts, horizon),
+        None => return random_walk(&y, last_ts, interval, horizon, basis),
     };
 
     // Residuals of the chosen model, then GARCH(1,1) on them.
@@ -125,7 +169,7 @@ pub fn forecast(snaps: &[Snapshot], hub: &str, horizon: usize) -> Forecast {
             var += psi[hstep - k] * psi[hstep - k] * esig[k];
         }
         let sd = var.max(0.0).sqrt();
-        let ts = last_ts + hstep as i64 * INTERVAL_SECONDS;
+        let ts = last_ts + hstep as i64 * interval;
         mean_pts.push((ts, level[hh]));
         lower.push((ts, level[hh] - Z95 * sd));
         upper.push((ts, level[hh] + Z95 * sd));
@@ -135,7 +179,10 @@ pub fn forecast(snaps: &[Snapshot], hub: &str, horizon: usize) -> Forecast {
         mean: mean_pts,
         lower,
         upper,
-        label: format!("ARIMA({p},1,{q})·GARCH(1,1) — next 2h, 95% band"),
+        label: format!(
+            "ARIMA({p},1,{q})·GARCH(1,1) · {basis} · next {} · 95% band",
+            horizon_label(interval, horizon)
+        ),
     }
 }
 
@@ -293,8 +340,15 @@ fn garch_multistep_var(
 // Fallback + helpers
 // ---------------------------------------------------------------------------
 
-/// Random walk with drift — used until enough history exists to fit ARIMA.
-fn random_walk(y: &[f64], last_ts: i64, horizon: usize) -> Forecast {
+/// Random walk with drift — used only when neither series has enough samples
+/// to fit ARIMA, which now means the archive asset failed to load as well.
+fn random_walk(
+    y: &[f64],
+    last_ts: i64,
+    interval: i64,
+    horizon: usize,
+    basis: &str,
+) -> Forecast {
     let n = y.len();
     let diffs: Vec<f64> = (1..n).map(|i| y[i] - y[i - 1]).collect();
     let drift = if diffs.is_empty() { 0.0 } else { mean(&diffs) };
@@ -305,7 +359,7 @@ fn random_walk(y: &[f64], last_ts: i64, horizon: usize) -> Forecast {
     let mut lower = Vec::with_capacity(horizon);
     let mut upper = Vec::with_capacity(horizon);
     for k in 1..=horizon {
-        let ts = last_ts + k as i64 * INTERVAL_SECONDS;
+        let ts = last_ts + k as i64 * interval;
         let yhat = last + drift * k as f64;
         let sd = (var * k as f64).max(0.0).sqrt();
         mean_pts.push((ts, yhat));
@@ -316,7 +370,9 @@ fn random_walk(y: &[f64], last_ts: i64, horizon: usize) -> Forecast {
         mean: mean_pts,
         lower,
         upper,
-        label: format!("random walk + drift — collecting history ({n}/{MIN_SAMPLES})"),
+        label: format!(
+            "random walk + drift · {basis} · collecting history ({n}/{MIN_SAMPLES})"
+        ),
     }
 }
 
